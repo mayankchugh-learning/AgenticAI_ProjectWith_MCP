@@ -16,11 +16,11 @@ Every backend item below assumes Step 0 is done. Frontend items can start now (`
 ### Quick wins (under 1 hour)
 | ID | Pri | Title | Audit ids | Depends on | Risky? | Decision |
 |---|---|---|---|---|---|---|
-| Q1 | P1 | Stop auto-deploy on push to `main` | A-047 | none | No | PENDING |
-| Q2 | P2 | Git-ignore key and generated files | A-013, A-046 (part) | none | No | PENDING |
+| Q1 | P1 | Stop auto-deploy on push to `main` | A-047 | none | No | APPROVED |
+| Q2 | P2 | Git-ignore key and generated files | A-013, A-046 (part) | none | No | APPROVED |
 | Q3 | P2 | Stop returning raw exception text; log tracebacks | A-008, A-052 (part) | Step 0 | No | PENDING |
 | Q4 | P2 | Fix FX source label and zero-division | A-018 | Step 0 | No | PENDING |
-| Q5 | P2 | Fix misleading UI labels | A-025 | none | No | PENDING |
+| Q5 | P2 | Fix misleading UI labels | A-025 | none | No | APPROVED |
 | Q6 | P2 | Input limits and upload hardening | A-002 (part), A-009, A-024, A-030, A-044 (part) | Step 0 | Low | PENDING |
 | Q7 | P2 | Stop logging user content | A-010 (part) | Step 0 | No | PENDING |
 | Q8 | P2 | Confirm the default Gemini model name | A-061 | your API key, approval to call Gemini | No | PENDING |

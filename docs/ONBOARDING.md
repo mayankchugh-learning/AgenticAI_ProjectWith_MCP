@@ -5,7 +5,7 @@ For a new developer. Commands marked **verified** were run on Windows PowerShell
 ## 1. Set up
 
 1. **Check tools (read-only):** `python --version`, `node --version`, `npm --version`, `git --version`. Wanted: Python 3.12 (not enforced by the repo), Node 20+ (verified on v25.5.0).
-2. **Work on a branch, not `main`:** `git switch -c <your-branch>`. A push to `main` triggers the deploy workflow (`.github/workflows/deploy.yml:3-7`).
+2. **Work on a branch, not `main`:** `git switch -c <your-branch>`. The deploy workflow now runs only when started manually (`.github/workflows/deploy.yml:3-5`), but keep `main` for reviewed changes.
 3. **Frontend (verified):**
    ```powershell
    cd frontend
@@ -66,5 +66,5 @@ Style to follow: thin routes, `from logger import GLOBAL_LOGGER as log`, setting
 1. One logical change per commit: `git add backend/tests/test_llm.py`, `git commit -m "Add tests for extract_text"`.
 2. Push your branch only: `git push -u origin <your-branch>`.
 3. Open a pull request on GitHub against `main`.
-4. **Warning:** merging into `main` triggers `deploy.yml`, which can create billed Google Cloud resources and a public service if the repo's secrets are set. Do not merge without the owner's approval.
+4. **Warning:** `deploy.yml` no longer runs on merge; it only runs when someone starts it manually, and it can then create billed Google Cloud resources and a public service if the repo's secrets are set. Do not start it without the owner's approval.
 5. Never commit `.env`, keys or credentials, and do not upgrade dependencies without approval.

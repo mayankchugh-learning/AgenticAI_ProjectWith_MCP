@@ -113,3 +113,33 @@ Read-only audit. No code was changed and nothing was run except read-only `git`/
 | A-061 | **Default model `gemini-3.8-flash` may not exist or be available to your key** (**NOT VERIFIED**); the README warns names are retired. | `settings.py:22`; `deploy.yml:235` | MEDIUM | S | Low | Confirm against the model list; keep one source of truth for the name |
 | A-062 | **Embedding/index fit unverified:** index uses `DOT_PRODUCT` with a 768-d model (normalization **NOT VERIFIED**); query vs document embedding task types **NOT VERIFIED**. | `deploy.yml:84-95`; `embeddings.py:17` | LOW | M | High: re-index | Verify in Vertex docs before any change |
 | A-063 | Sanctions, credit, tax and expense "tools" are LLM recall, not data sources; disclosed in the README. | `tools.py:29-175,229-269` | INFORMATIONAL | – | – | None unless real integrations are wanted |
+
+## Resolution Log
+
+Findings above describe the repository as audited on 2026-10-06 and are not rewritten. Resolutions are appended here. Not committed by Claude; the owner commits.
+
+Common baseline (before any change, 2026-10-07): frontend `npm test` 1 passed; `npm run lint` 16 problems (9 errors, 7 warnings); `npx tsc --noEmit -p tsconfig.app.json` exit 0; `npm run build` OK; backend `pytest backend/tests -q` 9 passed.
+
+### Q1 — Stop auto-deploy on push to `main` (resolves A-047 in part)
+- **Change:** `deploy.yml` trigger reduced from `push` to `main` + `workflow_dispatch` to `workflow_dispatch` only, with a comment.
+- **Reason:** a push to `main` could create billed Google Cloud resources and a public, unauthenticated service with no test gate.
+- **Files modified:** `.github/workflows/deploy.yml`; docs that described the old trigger: `README.md`, `CLAUDE.md`, `DEPLOY.md`, `docs/ARCHITECTURE.md`, `docs/ONBOARDING.md`, `docs/OPERATIONS.md` (plus a snapshot note in `docs/PROJECT_DISCOVERY.md` and `docs/UNDERSTANDING.md`).
+- **Tests executed:** YAML parsed with PyYAML before and after: triggers were `{push: {branches: [main]}, workflow_dispatch}`, now `{workflow_dispatch}`; jobs unchanged (`['deploy']`). Full suites as below.
+- **Result:** pass.
+- **Known limitations:** the workflow itself was never run, so end-to-end deploy behaviour is still NOT VERIFIED. There is still no test or lint gate (plan item N4), and a manual run still creates paid resources and a public service (plan items N1, N2). Whether the GitHub UI shows the "Run workflow" button on a non-default branch was not checked.
+
+### Q2 — Git-ignore key and generated files (resolves A-013; part of A-046)
+- **Change:** `.gitignore` gains `*-key.json`, `*service-account*.json`, `*.pem`, `*.p12`, `*.pfx` and `init_embeddings.json`.
+- **Reason:** `DEPLOY.md` step 6 creates `github-deployer-key.json` in the working directory, which no rule ignored.
+- **Files modified:** `.gitignore`.
+- **Tests executed:** `git check-ignore` on sample names before (all not ignored) and after (all ignored, including `my-service-account-prod.json` after widening one pattern); `git ls-files -ci --exclude-standard` shows no tracked file became ignored; `.env.example`, `requirements.txt`, `frontend/package.json`, `backend/api/main.py`, `.claude/settings.json` and the sample PDFs are still not ignored.
+- **Result:** pass.
+- **Known limitations:** patterns are name-based; a key saved as e.g. `creds.json` is still not ignored. `*.pem` also ignores any future legitimately tracked `.pem` file (none exist now). Secret scanning of history was not re-run.
+
+### Q5 — Fix misleading UI labels (resolves A-025)
+- **Change:** `RagQATab.tsx`: label "Verified Answer" became "AI-generated answer". `AuditTab.tsx`: removed the three client timers that moved phases to running/done at 3s, 6s and 9s, so phases stay `pending` until the response arrives; the footer text "All Passed" became "Complete".
+- **Reason:** the UI overstated trust in model output, invented progress the server does not report, and said "All Passed" even for a REJECTED memo.
+- **Files modified:** `frontend/src/components/RagQATab.tsx`, `frontend/src/components/AuditTab.tsx`; new `frontend/src/test/RagQATab.characterization.test.tsx` and `frontend/src/test/AuditTab.characterization.test.tsx`.
+- **Tests executed:** 15 characterization tests written first against the unchanged code (all passed: 16 total with the existing test). After the change, exactly 3 of them failed as intended (the old label, the old footer text, the timer behaviour); those 3 assertions, which I wrote in this task and which were not part of the baseline, were updated to the new behaviour. Baseline tests (`example.test.ts`, 9 pytest) were not modified. Final: frontend 16 passed, lint 16 problems (unchanged), tsc exit 0, build OK, pytest 9 passed.
+- **Result:** pass.
+- **Known limitations:** the audit pipeline panel now shows four numbered pending steps for the whole run (the right-hand panel shows the spinner), which is honest but less lively. `AuditTab.tsx` still maps `running` phases to `error` on failure, which is now a no-op. The footer still reads "4 Agents · Sequential" (three agents plus synthesis). No formatter is configured. The components were tested in jsdom, not in a browser (visual check NOT VERIFIED).

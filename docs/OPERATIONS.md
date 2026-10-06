@@ -66,4 +66,4 @@ Rebuild an index from stored PDFs: `POST /api/rag/ingest-gcs` (`endpoints.py:185
 
 ## 6. Cost and safety reminders
 - Audit and Q&A call paid or rate-limited Google services; document Q&A needs an index billed by the hour (`DEPLOY.md`).
-- Only branches other than `main` should be pushed unless you intend to deploy (`deploy.yml:3-7`).
+- Deployment only happens when `deploy.yml` is started manually (`deploy.yml:3-5`); pushing to `main` no longer deploys.

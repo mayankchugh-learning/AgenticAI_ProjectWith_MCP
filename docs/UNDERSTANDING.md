@@ -1,5 +1,7 @@
 # UNDERSTANDING — Meridian AI
 
+> **Snapshot note:** this file describes the repo before plan items Q1/Q2/Q5; `deploy.yml` now runs only by manual dispatch (see the Resolution Log in `docs/AUDIT.md`).
+>
 > **Note on `README.md:<line>` citations in this file:** they refer to the ORIGINAL README (commit `c2bbced`, 276 lines). `README.md` was rewritten afterwards, so its line numbers no longer match. View the original with `git show c2bbced:README.md`.
 
 Built from code read during the read-only discovery sessions. Nothing was run. Every claim carries `file:line` (repo-relative), or is marked **INFERRED** (reasoned, not observed) or **NOT VERIFIED** (could not confirm). Third-party library internals (LangChain, LangGraph, FastAPI, Gemini/Vertex clients) were not read, so behaviour inside them is NOT VERIFIED. No secret values were read; `.env` was never opened.

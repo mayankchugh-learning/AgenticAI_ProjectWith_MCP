@@ -82,13 +82,13 @@ In Docker, one server serves both the API and the built web page on port 8080 (`
 | Vitest, ESLint, Playwright | Frontend test and lint tools | vitest 3.2.4 |
 | Docker, Cloud Run, Secret Manager, GitHub Actions | Packaging and deployment | see [Deployment](#deployment-and-cost) |
 
-Backend versions are pinned in `requirements.txt`. Whether all pinned versions install together is **not yet verified**. Frontend dependencies use `^` ranges with `package-lock.json`.
+Backend versions are pinned in `requirements.txt`. All pinned versions installed together on Python 3.12.10 (`pip install -r requirements-dev.txt` succeeded and `pip check` found no conflicts; verified). Frontend dependencies use `^` ranges with `package-lock.json`.
 
 ## Prerequisites
 
 | For | You need | Status on the machine used |
 |---|---|---|
-| Backend | **Python 3.12** (not enforced by the repo) | Not installed |
+| Backend | **Python 3.12** (not enforced by the repo) | 3.12.10 installed with winget; a Microsoft Store Python 3.13.14 is also present and was not used |
 | Frontend | **Node 20+** (the Dockerfile builds with Node 20) | Verified on Node v25.5.0, npm 11.10.0 |
 | Everything | Git | 2.52.0 |
 | Audit feature | A Gemini API key (link taken from the original README, not checked: https://aistudio.google.com/apikey) | Not used yet |
@@ -110,7 +110,7 @@ npm run build   # writes frontend/dist
 
 `npm run lint` currently **fails** (9 errors, 7 warnings in existing code). `npm ci` reports 33 audit findings; nothing has been upgraded.
 
-### Backend (documented, not yet verified)
+### Backend (install and tests verified; starting the server not yet verified)
 
 ```powershell
 python -m venv .venv
@@ -119,6 +119,8 @@ pip install -r requirements-dev.txt
 copy .env.example .env          # then edit .env and set GOOGLE_API_KEY
 uvicorn api.main:app --app-dir backend --reload --port 8080
 ```
+
+What was actually run (Git Bash on Windows, calling the venv's Python directly instead of activating it): `<path-to-python3.12> -m venv .venv`, then `./.venv/Scripts/python.exe -m pip install -r requirements-dev.txt` (exit 0). `Activate.ps1`, `copy` and `uvicorn` were not run. If `python` is not on your PATH, use the full path to Python 3.12 or the venv's `python.exe`.
 
 Then open **http://localhost:8080/docs** (the API docs FastAPI generates). `GET /api/health` should return `{"status": "ok"}` even with no `.env`, because clients connect lazily on first use (INFERRED from the code at `backend/rag/llm.py:12` and `backend/api/endpoints.py:41`; not run).
 
@@ -216,28 +218,29 @@ Dockerfile, requirements.txt, requirements-dev.txt, .env.example, DEPLOY.md
 
 ## Testing
 
-Backend (not yet run on this machine):
+Backend (verified: 9 passed, about 20 seconds; run from the repo root with the venv's Python):
 ```powershell
-pytest backend/tests
+.\.venv\Scripts\python.exe -m pytest backend/tests -q
 ```
+(Verified from Git Bash as `./.venv/Scripts/python.exe -m pytest backend/tests -q`.)
 `test_api.py` contains 9 tests (health, status, 404, ask, audit, non-PDF upload, chunking, sample PDFs, log severity). They fake all external calls and need no accounts or network. Run them in a shell without `GCP_PROJECT_ID` set, because one test expects the fake value `test-project`. They do not exercise Gemini, Vector Search, Cloud Storage or document ingestion.
 
-Frontend (verified): `cd frontend; npm test` passes 1 test. `npm run lint` currently fails.
+Frontend (verified): `cd frontend; npm test` passes 16 tests (1 placeholder plus 15 characterization tests for `RagQATab` and `AuditTab`, with the API client mocked). `npx tsc --noEmit -p tsconfig.app.json` passes. `npm run lint` currently fails (16 existing problems).
 
 ## Deployment and cost
 
-`.github/workflows/deploy.yml` runs on **every push to `main`** (and manually). If its GitHub secrets are set, it:
+`.github/workflows/deploy.yml` runs **only when you start it by hand** (Actions → Deploy to GCP Cloud Run → Run workflow). It no longer starts on a push to `main`. If its GitHub secrets are set, a run:
 - creates a Vector Search index and endpoint, **billed by the hour even when idle**;
 - stores your Gemini key in Secret Manager;
 - deploys a **public Cloud Run service with no login** (anyone with the URL can use your Gemini quota and upload files).
 
-Read [DEPLOY.md](DEPLOY.md) first: it explains costs, budget alerts and how to switch everything off. Work on other branches if you do not want to deploy. The workflow has no test step.
+Read [DEPLOY.md](DEPLOY.md) first: it explains costs, budget alerts and how to switch everything off. The workflow has no test step.
 
 ## Troubleshooting
 
 | What you see | What to do |
 |---|---|
-| `python` or `py` not found | Python 3.12 is not installed; install it first |
+| `python` or `py` not found | Python may be installed but not on your PATH. Use its full path or the venv's `.venv\Scripts\python.exe` |
 | `ModuleNotFoundError: No module named 'api'` | Run from the repo root and keep `--app-dir backend` |
 | Settings seem empty | Run from the repo root; `.env` is looked up in the current directory |
 | AI features fail with auth or "model not found" errors | Check `GOOGLE_API_KEY`; set `VERTEX_LLM_MODEL_NAME` to a current model (default not verified) |
@@ -252,7 +255,7 @@ The backend logs one JSON line per event to the console and to `logs/<timestamp>
 
 ## Contributing
 
-- Work on a branch; do not push to `main` unless you intend to deploy.
+- Work on a branch and open a pull request. Deployment is manual, so a merge to `main` does not deploy.
 - Keep changes small, one logical change per commit, and run the tests before and after.
 - Never commit `.env`, keys or credentials; use placeholders in docs and examples.
 - Follow the existing style: thin routes, `from logger import GLOBAL_LOGGER as log`, settings via `config.settings`, and tests with fakes (see `CLAUDE.md`).

@@ -12,16 +12,18 @@ Meridian AI is a learning/demo app: a FastAPI backend plus a React/Vite SPA with
 
 Worked in this repo on Windows PowerShell (Node v25.5.0, npm 11.10.0):
 - Install frontend: `cd frontend; npm ci`
-- Test frontend: `cd frontend; npm test` (1 test passed, vitest)
+- Test frontend: `cd frontend; npm test` (16 tests passed, vitest + Testing Library; API client is mocked)
+- Type-check frontend: `cd frontend; npx tsc --noEmit -p tsconfig.app.json` (exit 0)
 - Build frontend: `cd frontend; npm run build` (writes `frontend/dist`)
+- Backend venv: `<python3.12> -m venv .venv`, then `./.venv/Scripts/python.exe -m pip install -r requirements-dev.txt` (exit 0, `pip check` clean)
+- Backend tests: `./.venv/Scripts/python.exe -m pytest backend/tests -q` from the repo root (9 passed, no network; run via Git Bash because the PowerShell tool was unavailable)
 
 Ran but failed:
 - Lint frontend: `cd frontend; npm run lint` exits 1 (16 problems: 9 errors, 7 warnings). Do not "fix" unless asked.
 
-Not verified (Python 3.12 is not installed on this machine, so none have run):
-- Backend install, run, tests. The Quick start and Testing sections of `README.md` list them, marked not yet verified.
-- Type-check: no command has been run. `frontend/tsconfig*.json` exist.
-- `npm run dev`, Docker build, any call to Gemini or Google Cloud.
+Not verified:
+- Starting the backend (`uvicorn`), `npm run dev`, Docker build, any call to Gemini or Google Cloud.
+- No Python formatter, linter or type checker is configured, and no frontend formatter.
 
 ## Directory map and key files
 
@@ -59,13 +61,13 @@ Not verified (Python 3.12 is not installed on this machine, so none have run):
 ## Windows notes and gotchas
 
 - Primary shell is PowerShell 5.1. It has no `&&`; chain with `;`. Git Bash is also available.
-- `py` and `python` are not on PATH (Python 3.12 not installed). Do not assume Python tooling works.
+- `python` is not on the Git Bash PATH. Python 3.12.10 is installed (user-level, `%LOCALAPPDATA%\Programs\Python\Python312`) and the project venv is `.venv`; call `.venv/Scripts/python.exe` explicitly because shell state does not persist between commands. A Microsoft Store Python 3.13.14 also exists; do not use it for this project.
 - Node here is v25.5.0, but `Dockerfile` builds with Node 20. Results on Node 20 are NOT VERIFIED.
 - Native-command stderr shows as `NativeCommandError` in PowerShell even when the exit code is 0 (seen with npm warnings). Check `$LASTEXITCODE`.
 - Git prints `LF will be replaced by CRLF` warnings. They are harmless.
 - Run backend commands from the repo root. `.env` is resolved relative to the working directory, and the logger creates `./logs` in the working directory.
 - Importing `logger` has side effects: it creates `./logs`, registers an `atexit` hook and configures logging.
-- A push to `main` triggers `deploy.yml` (billed GCP provisioning, public Cloud Run). Push branches other than `main`.
+- `deploy.yml` runs only by manual dispatch (billed GCP provisioning, public Cloud Run); a push to `main` no longer triggers it (plan item Q1).
 - Frontend has two lockfiles (`package-lock.json`, `bun.lock`). Use `npm ci`; `Dockerfile` does.
 - `npm ci` reports 33 audit findings. Leave them unless asked.
 - The audit tab's progress steps are fake timers (`frontend/src/components/AuditTab.tsx`), not real server progress.

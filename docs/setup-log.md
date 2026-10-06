@@ -70,3 +70,55 @@ Notes:
 - Secret scan: git grep for key/token patterns over tracked files printing file:line only; no hardcoded secrets found (one false positive, a Secret Manager reference at deploy.yml:236). The first private-key pattern attempt failed because git grep parsed it as an option; re-run with -e found none. .env was never opened; .env.example values were not viewed.
 - No scanners run. Proposed (awaiting approval): npm audit [--omit=dev] in frontend/; pip-audit -r requirements.txt (needs Python + install of pip-audit).
 - Limits: backend never run (no Python); frontend components DocumentUploadTab, SystemStatusTab, Index.tsx, ui/*, tsconfig and Playwright files not read.
+
+## 2026-10-07 — Python install (user said: "winget install Python.Python.3.12")
+
+- CORRECTION: earlier "Python not installed" was wrong. Python 3.13.14 (Microsoft Store, %LOCALAPPDATA%\Microsoft\WindowsApps) already exists but is not on the Git Bash PATH. Project targets 3.12; 3.13 compatibility with the pinned requirements is NOT VERIFIED.
+- PowerShell tool was unavailable this session; used Git Bash and the full path to winget.exe (v1.29.380, not on bash PATH).
+- Ran: winget install --id Python.Python.3.12 --exact --source winget --accept-package-agreements --accept-source-agreements. Result: installer hash verified, Successfully installed (3.12.10), exit 0. Outside this folder (user-level install). venv/pip/pytest not yet run.
+- User asked whether to provide GOOGLE_API_KEY: advised not yet and never in chat; unit tests need none.
+
+## 2026-10-07 — Backend environment and BASELINE
+
+- Created .venv with Python 3.12.10 (git-ignored): `<Python312> -m venv .venv`. Each command calls `.venv/Scripts/python.exe` explicitly (shell state does not persist between commands).
+- `.venv/Scripts/python.exe -m pip install -r requirements-dev.txt` -> exit 0 (all pinned versions resolved on 3.12.10; this answers the earlier NOT VERIFIED about installability). `pip check`: No broken requirements found. pip 25.0.1 not upgraded.
+- User reported putting GOOGLE_API_KEY in .env (never opened by me; .env confirmed git-ignored at .gitignore:227 and untracked).
+- BASELINE: `.venv/Scripts/python.exe -m pytest backend/tests -q` from repo root -> **9 passed in 20.04s**, exit 0. No network or Google calls expected (all faked; conftest sets fake env before settings import, env var precedence over .env INFERRED). The README claim of 9 tests passing is now VERIFIED.
+- Logger printed "GCS_BUCKET_NAME not set - skipping GCS log upload" at exit (expected, conftest blanks it). A git-ignored logs/ folder was created.
+
+## 2026-10-07 — Plan items Q1, Q2, Q5 implemented (approved by owner: "Approve Q1, Q2, Q5"; plain pytest, no new tooling)
+
+- Recorded APPROVED for Q1, Q2, Q5 in docs/IMPROVEMENT_PLAN.md (other rows remain PENDING).
+- Baseline before changes: frontend test 1 passed; lint 16 problems (9 errors, 7 warnings); tsc --noEmit -p tsconfig.app.json exit 0; build OK; pytest 9 passed.
+- Wrote 15 characterization tests (vitest + @testing-library/react, API client mocked, no network/key) for RagQATab and AuditTab; all passed on unchanged code. After the Q5 change 3 failed as intended; I updated those 3 assertions (tests written this task, not baseline tests) and explained why in the Resolution Log.
+- Q1: deploy.yml now workflow_dispatch only. Q2: .gitignore patterns added (one pattern widened after my own sample name was not matched). Q5: label text, timers removed, footer text.
+- Final: frontend 16 passed; lint 16 problems (unchanged); tsc exit 0; build OK; pytest 9 passed.
+- Docs updated: README.md, CLAUDE.md, DEPLOY.md, docs/ARCHITECTURE.md, docs/ONBOARDING.md, docs/OPERATIONS.md; snapshot notes in PROJECT_DISCOVERY.md/UNDERSTANDING.md; Resolution Log appended to docs/AUDIT.md. Also updated verified-status wording (Python 3.12.10 install, venv, pytest 9 passed).
+- Not committed (owner commits). No push. PowerShell tool was unavailable this session; Git Bash used.
+
+## 2026-10-07 — Docs batch 1: docstrings/comments in 5 backend modules (owner request; no behavior change)
+
+- Created docs/EXECUTION_REPORT.md (approved items Q1/Q2/Q5, baseline vs result: frontend 1 -> 16 tests, lint 16 -> 16, tsc 0 -> 0, build OK, pytest 9 -> 9).
+- Ranked backend modules by docstring coverage and comment density (throwaway script in $TEMP). Chosen: config/settings.py, api/schemas.py, logger/__init__.py, api/main.py, logger/custom_logger.py. Skipped agent/prompts.py (already has a 16-line header and its body is prompt text that must not change). Next-batch candidates: rag/embeddings.py, agent/agents.py, rag/data_ingestion.py.
+- Rules followed: comments instead of docstrings on Pydantic models and route handlers (docstrings there change the OpenAPI schema); no edits to @tool docstrings or prompt strings (the model sees them).
+- Proof of no logic change: AST of HEAD vs working copy identical with docstrings ignored for all 5 files; all pre-existing docstrings unchanged; 6 docstrings added; pytest 9 passed; OpenAPI schema SHA-256 identical (HEAD vs working copy, hash 10f0bf09...). NOTE: my first OpenAPI comparison was invalid (it compared the logger exit message, not the hash) and was discarded and redone.
+- Not committed; unstaged on top of the 17 staged files. No push.
+
+## 2026-10-07 — Docs batch 2: docstrings/comments in 5 more backend modules (owner said "yes")
+
+- Modules: rag/embeddings.py, agent/agents.py, rag/data_ingestion.py, api/endpoints.py, agent/tools.py. Comments only on route handlers; no change to @tool docstrings or prompt text.
+- Proof: AST identical with docstrings ignored (all 5), all pre-existing docstrings unchanged, 4 docstrings added; SHA-256 of tool names+descriptions+arg schemas, of the four prompts, and of the OpenAPI schema identical between HEAD and working copy; pytest 9 passed. (Hashes printed to the terminal, not stored.)
+- One of my comments was corrected after review (15% fallback dict also carries raw_response).
+- Not committed; unstaged on top of the 17 staged files. No push.
+
+## 2026-10-07 — Docs batch 3: comments/docstring in rag/llm.py, rag/retrieval.py, rag/vector_store.py, agent/prompts.py (owner said "yes")
+
+- Comments only except one module docstring in prompts.py (text of every prompt unchanged).
+- Proof across ALL 14 changed backend files (batches 1-3): AST identical to HEAD with docstrings ignored; existing docstrings unchanged; SHA-256 of tool names+descriptions+arg schemas, of the four agent prompts, of retrieval.SYSTEM_PROMPT and of the OpenAPI schema identical to HEAD; pytest 9 passed.
+- Process note: my first AST run for this batch crashed (Windows path inside a Python heredoc) and proved nothing; I redid it with a sed-generated script and it passed. The hash and pytest results from the first run were valid and were not rerun.
+- With this batch every backend module has docstrings/comments (empty package __init__ files and tests excluded). Not committed; unstaged on top of the 17 staged files. No push.
+
+## 2026-10-07 — Commits and push (owner: "please commit and push as per your suggestion")
+
+- Unstaged everything (`git restore --staged .`, index only), then made three commits on scratch/explore: (1) Q1/Q2/Q5 + characterization tests + DEPLOY.md trigger note; (2) docs (CLAUDE.md, README.md, docs/*); (3) backend docstrings/comments (14 files, no logic change).
+- Then `git push` of scratch/explore only. main was not pushed. Commit ids: see `git log --oneline`.

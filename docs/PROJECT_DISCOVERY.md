@@ -1,5 +1,7 @@
 # PROJECT_DISCOVERY — Meridian AI (read-only discovery)
 
+> **Snapshot note:** this file describes the repo before plan items Q1/Q2/Q5; `deploy.yml` now runs only by manual dispatch (see the Resolution Log in `docs/AUDIT.md`).
+>
 > **Note on `README.md:<line>` citations in this file:** they refer to the ORIGINAL README (commit `c2bbced`, 276 lines). `README.md` was rewritten afterwards, so its line numbers no longer match. View the original with `git show c2bbced:README.md`.
 
 Status: **PROPOSAL / PLAN. Nothing in the repo has been changed, run, installed or built** except `.claude/settings.json` and files under `docs/`.

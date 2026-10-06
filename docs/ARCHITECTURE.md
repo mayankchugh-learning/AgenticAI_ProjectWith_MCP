@@ -188,7 +188,7 @@ Details: tools return `LLM_ERROR` handling at `tools.py:18-19,56-57,94-95,152-15
 
 ```mermaid
 flowchart LR
-  GH[GitHub push to main] --> GA[Actions: deploy.yml]
+  GH[Manual run in GitHub Actions] --> GA[Actions: deploy.yml]
   GA -->|provision| IDX[(Vector Search index + endpoint)]
   GA --> BKT[(bucket <project>-vector-staging)]
   GA --> SM[Secret Manager GOOGLE_API_KEY]
@@ -207,6 +207,6 @@ From `deploy.yml:3-7,58-258` and `Dockerfile`: one container serves API and SPA;
 5. No timeouts/retries around Gemini and Google Cloud in repo code; synchronous, sequential audit (~11+ model calls, INFERRED).
 6. One bucket serves uploads, index staging and logs (`deploy.yml:14,235`; `custom_logger.py:96`).
 7. Embedding model, index dimension (768) and distance metric are coupled and fixed at index creation (`embeddings.py:3-6`, `deploy.yml:83-95`); changing the model needs a new index (INFERRED).
-8. Deploy runs on every push to `main` with no test gate (`deploy.yml:3-7`).
+8. Deploy has no test gate. It was changed from "every push to `main`" to manual dispatch only (plan item Q1); a test-gated pipeline is plan item N4 (`deploy.yml:3-5`).
 9. Import-time side effects in `logger` (creates `./logs`, registers `atexit`) (`logger/__init__.py:5`, `custom_logger.py:25-36`).
 10. `FX` tool mislabels LLM-estimated rates as "live market" (`tools.py:213`).
