@@ -2,53 +2,82 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-## Overview
+Only facts verified by reading code or running a command are stated. Anything else is marked NOT VERIFIED. Evidence lives in `docs/setup-log.md`, `docs/PROJECT_DISCOVERY.md` and `docs/UNDERSTANDING.md`.
 
-Meridian AI: a FastAPI backend plus a React/Vite frontend with two features: (1) RAG Q&A over uploaded PDFs (Vertex AI Vector Search + Gemini), and (2) a multi-agent procurement audit (risk, tax and control agents, then a CFO memo). It is a learning project. "Aldermoor Industries" and all sample data in `sample_docs/` are fictional.
+## Project summary
 
-## Commands
+Meridian AI is a learning/demo app: a FastAPI backend plus a React/Vite SPA with two features. (1) Document Q&A (RAG): upload PDFs, chunk and embed them into Vertex AI Vector Search, answer questions with Gemini from retrieved chunks. (2) Purchase audit: three LangChain tool-using agents (risk, tax, control) run in sequence, then one plain LLM call writes a CFO memo. The company "Aldermoor Industries" and `sample_docs/` are fictional. Most audit "checks" are LLM recall, not real data; only the FX rate uses a live API.
 
-Run everything from the repo root, because `.env` is resolved relative to the working directory.
+## Commands (run from the repo root unless noted)
 
-```bash
-# Backend setup (Python 3.12)
-python3.12 -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\Activate.ps1
-pip install -r requirements-dev.txt
-cp .env.example .env                                     # set GOOGLE_API_KEY at minimum
+Worked in this repo on Windows PowerShell (Node v25.5.0, npm 11.10.0):
+- Install frontend: `cd frontend; npm ci`
+- Test frontend: `cd frontend; npm test` (1 test passed, vitest)
+- Build frontend: `cd frontend; npm run build` (writes `frontend/dist`)
 
-# Run backend (Swagger UI at http://localhost:8080/docs)
-uvicorn api.main:app --app-dir backend --reload --port 8080
+Ran but failed:
+- Lint frontend: `cd frontend; npm run lint` exits 1 (16 problems: 9 errors, 7 warnings). Do not "fix" unless asked.
 
-# Tests (no network or credentials needed; conftest.py fakes the env)
-pytest backend/tests
-pytest backend/tests/test_api.py::test_name              # single test
+Not verified (Python 3.12 is not installed on this machine, so none have run):
+- Backend install, run, tests. The Quick start and Testing sections of `README.md` list them, marked not yet verified.
+- Type-check: no command has been run. `frontend/tsconfig*.json` exist.
+- `npm run dev`, Docker build, any call to Gemini or Google Cloud.
 
-# Smoke-test the audit pipeline directly (from backend/)
-cd backend && python -m agent.agents
+## Directory map and key files
 
-# Frontend (separate terminal, serves on :3000)
-cd frontend && npm install && npm run dev
-npm run lint        # eslint
-npm test            # vitest run (single file: npx vitest run src/test/example.test.ts)
-npm run build       # output to frontend/dist
+- `backend/api/` — `main.py` (app, CORS, SPA serving, shutdown log flush), `endpoints.py` (all routes), `schemas.py` (Pydantic models).
+- `backend/rag/` — `llm.py` (Gemini by API key), `embeddings.py` and `vector_store.py` (Vertex), `data_ingestion.py` (PDF to chunks to index), `retrieval.py` (RAG chain, 3 retriever types).
+- `backend/agent/` — `agents.py` (supervisor), `tools.py` (5 tools), `prompts.py` (agent and CFO prompts).
+- `backend/config/settings.py` — the `settings` singleton; env var names differ from attribute names.
+- `backend/logger/custom_logger.py` — structlog JSON logging, GCS flush on exit.
+- `backend/tests/` — `conftest.py` (fake env), `test_api.py`.
+- `frontend/src/lib/api.ts` — the only backend client. Tabs in `frontend/src/components/`. `components/ui/` is shadcn (`frontend/components.json` exists).
+- `.github/workflows/deploy.yml` — provisions paid GCP resources and deploys; `Dockerfile` — builds the SPA, then serves both on one port.
+- `docs/` — discovery notes and `setup-log.md`; `Project-runbook/` is git-ignored.
 
-# Docker (multi-stage: builds frontend, then Python image serving both on :8080)
-docker build -t meridian-ai . && docker run -p 8080:8080 --env-file .env meridian-ai
-```
+## Code conventions observed
 
-## Architecture
+- Layering: `api -> agent, rag -> config, logger`. Routes stay thin and call `rag/` or `agent/` code.
+- Logging: `from logger import GLOBAL_LOGGER as log`, then structured calls such as `log.info("event", key=value)`. Log sizes and ids, not user content.
+- Route errors: `try/except Exception`, `log.error(...)`, then `HTTPException(500, detail=str(e))` (`backend/api/endpoints.py`).
+- Tools do not raise on LLM failure: they return a warning string or a fallback (`backend/agent/tools.py`).
+- External clients are created lazily with `@lru_cache` factories (`get_llm`, `get_vector_store`, `get_embeddings`, `get_supervisor`).
+- Settings come from `config.settings.settings`, never from `os.environ` directly. Env aliases are set with `validation_alias`.
+- Tests: pytest with FastAPI `TestClient`. Fake external calls with `monkeypatch.setattr(endpoints, ...)`. `conftest.py` sets fake env values, so tests need no network or accounts.
+- Frontend: call the backend only through `src/lib/api.ts`. Use the `@/` import alias.
 
-The backend packages live in `backend/` and import each other as top-level modules (`from rag.llm import ...`), so `backend/` must be on `sys.path`. That is why uvicorn takes `--app-dir backend` and `tests/conftest.py` inserts it into `sys.path`. Dependency direction is `api -> rag, agent -> config, logger`.
+## Operating rules (from the session rules)
 
-- `api/`: `main.py` builds the app, adds CORS (wide open) and includes the routers. `endpoints.py` defines four routers (`health`, `status`, `agent`, `rag`). `schemas.py` holds the Pydantic models. When `frontend/dist` exists, `main.py` also serves the built SPA through a catch-all route. The route rejects `api/*` paths and guards against path traversal.
-- `rag/`: `llm.py` has `get_llm()`, a cached Gemini chat model that authenticates with `GOOGLE_API_KEY`, and `extract_text()`, which flattens Gemini's content-block lists. `embeddings.py` uses Vertex AI and needs GCP credentials. The embedding output must stay at 768 dimensions to match the Vector Search index. `vector_store.py`, `data_ingestion.py` (PDF to chunks to store) and `retrieval.py` (top-3 chunks, then an answer grounded in them) complete the pipeline. This is a deliberate split: the LLM uses an API key, while embeddings and Vector Search use GCP auth.
-- `agent/`: `ProcurementSupervisor` in `agents.py` runs three `langchain.agents.create_agent` agents sequentially (risk, tax, control), each with its own prompt (`prompts.py`) and tools (`tools.py`, five mock/LLM-knowledge tools; only the FX check uses live data). It then makes one plain LLM call with `SYNTHESIS_PROMPT_TEMPLATE` for the CFO memo. No LangGraph code is written directly.
-- `config/settings.py`: a pydantic-settings `Settings` singleton reading `.env`. Env var names differ from attribute names (e.g. `GCP_PROJECT_ID` is `settings.GCP_PROJECT`, `VERTEX_LLM_MODEL_NAME` is `settings.llm_model_name`). Check the `validation_alias` before adding or using a setting. It also exports `GOOGLE_APPLICATION_CREDENTIALS` from `GCP_SERVICE_ACCOUNT_PATH`.
-- `logger/`: structlog JSON logging (`GLOBAL_LOGGER`). It writes files under `./logs` and flushes them to GCS on shutdown/exit when `GCS_BUCKET_NAME` is set. Tests blank that variable to disable the upload.
-- `frontend/`: Vite + React + TypeScript + shadcn/ui + Tailwind. Tabs are in `src/components/` (`RagQATab`, `DocumentUploadTab`, `AuditTab`, `SystemStatusTab`). `src/lib/api.ts` is the only code that calls the backend.
+1. Until the owner approves a plan, do not modify, delete, rename or upgrade anything. Create files only under `docs/`, unless the owner explicitly asks otherwise.
+2. Never print, copy, log or commit secrets. Treat `.env` files, keys, certificates, tokens and connection strings as sensitive. Name variables only, never values. Never invent secret values.
+3. Verify claims against the code, not the README or folder names. Trace real execution paths.
+4. Cite `file:line` for findings. Mark inferences INFERRED and unconfirmed items NOT VERIFIED. Never say something works unless you ran it.
+5. Prefer small, reversible changes. One logical change per commit. Run tests before and after every change.
+6. Stop and ask before: needing credentials, touching production or paid cloud resources, deleting data, upgrading dependencies, architectural changes, or unclear security behavior.
+7. Log every significant command, result and assumption in `docs/setup-log.md`.
 
-## Gotchas
+## Windows notes and gotchas
 
-- The audit needs only `GOOGLE_API_KEY`. RAG upload and Q&A also need the GCP and Vector Search settings, plus a deployed index and endpoint. See `DEPLOY.md`, which also covers hourly costs.
-- The default model name `gemini-3.8-flash` may be retired. If you see "model not found", set `VERTEX_LLM_MODEL_NAME`.
-- Deployment is through `.github/workflows/deploy.yml` to Cloud Run (the Dockerfile honors `$PORT`).
+- Primary shell is PowerShell 5.1. It has no `&&`; chain with `;`. Git Bash is also available.
+- `py` and `python` are not on PATH (Python 3.12 not installed). Do not assume Python tooling works.
+- Node here is v25.5.0, but `Dockerfile` builds with Node 20. Results on Node 20 are NOT VERIFIED.
+- Native-command stderr shows as `NativeCommandError` in PowerShell even when the exit code is 0 (seen with npm warnings). Check `$LASTEXITCODE`.
+- Git prints `LF will be replaced by CRLF` warnings. They are harmless.
+- Run backend commands from the repo root. `.env` is resolved relative to the working directory, and the logger creates `./logs` in the working directory.
+- Importing `logger` has side effects: it creates `./logs`, registers an `atexit` hook and configures logging.
+- A push to `main` triggers `deploy.yml` (billed GCP provisioning, public Cloud Run). Push branches other than `main`.
+- Frontend has two lockfiles (`package-lock.json`, `bun.lock`). Use `npm ci`; `Dockerfile` does.
+- `npm ci` reports 33 audit findings. Leave them unless asked.
+- The audit tab's progress steps are fake timers (`frontend/src/components/AuditTab.tsx`), not real server progress.
+- `.claude/settings.json` denies reads of `.env`, `.env.local`, `.env.production`, `secrets/**` and `*.pem`.
+
+## Do not
+
+- Do not read, print or commit `.env` files, keys or credentials.
+- Do not upgrade, loosen or add dependencies without approval.
+- Do not run `npm audit fix` or `npm audit fix --force`.
+- Do not hand-edit `package-lock.json`, `frontend/dist` or `node_modules`.
+- Do not push to `main`, trigger `deploy.yml`, or create or delete cloud resources without explicit approval.
+- Do not call Gemini, Vertex AI, GCS or the audit endpoint without approval. They can cost money and send data to Google.
+- Do not run `git restore`, `git reset --hard`, `git branch -D` or any delete without approval.
+- Do not rewrite or delete `docs/setup-log.md` entries; correct them with a new entry.

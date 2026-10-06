@@ -1,275 +1,263 @@
 # Meridian AI
 
-A small web app that does two jobs, using AI:
+A small web app that does two jobs using AI:
 
-1. **Ask questions about your documents.** Upload PDFs (policies, contracts, reports), then ask in plain English. The app answers using only what is in your documents.
-2. **Check a purchase before paying.** Paste a purchase request. Three AI "specialists" review it (risk, tax, accounting). A final "CFO" step writes one short memo with a decision.
+1. **Ask questions about your documents.** Upload PDFs, then ask in plain English. The prompt tells the model to answer only from the retrieved passages and to say it does not know otherwise.
+2. **Check a purchase before paying.** Paste a purchase request. Three AI "specialists" (risk, tax, financial control) review it, and a final "CFO" step writes one memo with a decision.
 
 It is built to **learn from**. The company in the examples, *Aldermoor Industries*, is **fictional**, and the sample documents contain made-up data.
 
-> The "checks" in the audit are done by the AI from its general knowledge (only the exchange-rate check uses a live data source). This is a demo of how such a system is built, **not** a real compliance tool.
+> The audit "checks" are produced by the AI from its general knowledge. Only the exchange-rate check uses a live data source (api.frankfurter.dev), with an AI estimate as a fallback. This is a demo of how such a system is built, **not** a real compliance tool.
 
-**Jump to:** [Technologies](#the-technologies-in-plain-words) · [How it fits together](#how-it-fits-together) · [Why many files?](#why-is-the-code-split-into-many-files) · [What is in this repo](#whats-in-this-repo) · [Run it on your computer](#run-it-on-your-computer) · [Why the cloud?](#why-would-you-need-the-cloud) · [Settings](#settings) · [Problems](#common-problems)
+**Verification status.** This README was rewritten from the code. Commands marked **verified** were run on Windows 11 PowerShell. Commands marked **not yet verified** are documented but have not been run, because Python 3.12 is not installed on the machine used. Evidence is in `docs/setup-log.md`.
+
+**Jump to:** [Features](#features) · [Architecture](#architecture) · [Technology](#technology-stack) · [Prerequisites](#prerequisites) · [Quick start](#quick-start) · [Configuration](#configuration) · [Usage](#usage) · [Structure](#project-structure) · [Testing](#testing) · [Deployment](#deployment-and-cost) · [Troubleshooting](#troubleshooting) · [Contributing](#contributing)
 
 ---
 
-## The technologies, in plain words
+## Features
 
-Think of a **restaurant**. Each technology plays one part.
+All features below exist in the code.
 
-| Technology | What it is | Restaurant analogy |
+| Feature | Where | Needs |
 |---|---|---|
-| **React** (frontend) | The web page you click on | The dining room, menu and buttons |
-| **FastAPI** (Python) | Receives requests from the page and sends back answers | The **waiter**: takes your order to the kitchen and brings the food back |
-| **Pydantic** | Checks that requests are filled in correctly | The order form: "you forgot the table number" |
-| **LangChain** | A toolkit for connecting AI steps together | The kitchen's recipe book and workflow |
-| **Gemini** (Google's AI model) | Reads text and writes answers | The **chef** |
-| **Embeddings** | Turn text into a list of numbers that capture its *meaning* | GPS coordinates for ideas: similar ideas get nearby coordinates |
-| **Vertex AI Vector Search** | A database that finds the stored text closest in meaning to your question | A library catalogue organised by *meaning*, not by title |
-| **RAG** (Retrieval-Augmented Generation) | Find the right pages first, then answer from them | An **open-book exam**: the chef checks the cookbook before answering |
-| **Agents and tools** | AI that can decide to run small programs (tools) to get facts | A chef who can use a scale, a thermometer and a timer |
-| **Cloud Storage** | Keeps files in Google Cloud | A filing cabinet |
-| **Docker** | Packs the app and everything it needs into one box | A lunchbox: opens the same anywhere |
-| **Cloud Run** | Runs that box on the internet, only when someone visits | A pop-up shop that opens only when customers arrive |
-| **Secret Manager** | Stores passwords and keys safely | A safe |
-| **GitHub Actions** | Builds and delivers the app automatically | A delivery robot |
-| **Logging** (structlog) | The app writes down what it does | The kitchen's diary: when something goes wrong, you read it |
+| Document Q&A with three retrieval strategies: `similarity` (3 chunks), `multiquery`, `contextual` (10 chunks, then trimmed) | `backend/rag/retrieval.py:26-48` | Google Cloud (Vector Search) + Gemini key |
+| PDF upload: chunks of 1000 characters with 100 overlap, embedded and indexed | `backend/rag/data_ingestion.py:22-44` | Google Cloud |
+| Bulk index of every PDF already in the bucket | `backend/rag/data_ingestion.py:47-73` | Google Cloud |
+| Purchase audit: risk, tax and control agents run one after another, then a CFO memo | `backend/agent/agents.py:37-84` | Gemini key only |
+| Five audit tools: sanctions screen, vendor credit score, cross-border tax, FX hedge check, CapEx/OpEx classification | `backend/agent/tools.py` | Gemini key (FX also calls api.frankfurter.dev) |
+| Health and status endpoints | `backend/api/endpoints.py:50-90` | Nothing |
+| React components for Q&A, document upload, audit and system status (how they are arranged into tabs in `pages/Index.tsx` was not read) | `frontend/src/components/` | Backend running |
+| JSON logging, uploaded to Cloud Storage on shutdown when a bucket is set | `backend/logger/custom_logger.py` | Optional |
 
----
+**Not in the code:** user accounts or authentication, a database, background jobs, queues, or per-user document separation.
 
-## How it fits together
+## Architecture
 
-```
- YOU (browser)
-   │  click "Ask"
-   ▼
- FRONTEND (React)                       the dining room
-   │  sends a request
-   ▼
- BACKEND (FastAPI)                      the waiter
-   │
-   ├── Document Q&A (RAG) ───────────┐
-   │     1. cut PDFs into small pieces│   Vertex AI: turns pieces into numbers
-   │     2. store them ───────────────┼─► Vector Search: finds pieces closest to your question
-   │     3. find pieces for question ◄┘
-   │     4. ask Gemini to answer from those pieces ─► Gemini
-   │
-   └── Purchase audit (agents)
-         Risk agent    ─ tools ┐
-         Tax agent     ─ tools ├─► each calls Gemini, then a "CFO" step writes the memo
-         Control agent ─ tools ┘
+```mermaid
+flowchart LR
+  U[Browser] --> FE[React SPA<br/>src/lib/api.ts]
+  FE --> API[FastAPI<br/>api/main.py + endpoints.py]
+  API --> RET[rag/retrieval.py]
+  API --> ING[rag/data_ingestion.py]
+  API --> AG[agent/agents.py]
+  RET --> LLM[rag/llm.py<br/>Gemini via API key]
+  RET --> VS[rag/vector_store.py]
+  ING --> VS
+  VS --> EMB[rag/embeddings.py<br/>Vertex AI embeddings]
+  VS --> VVS[(Vertex AI Vector Search)]
+  API -->|copy of uploaded PDF| GCS[(Cloud Storage)]
+  AG --> TOOLS[agent/tools.py]
+  TOOLS --> LLM
+  TOOLS --> FX[(api.frankfurter.dev)]
+  API --> LOG[logger<br/>structlog JSON]
+  LOG -->|on shutdown| GCS
+  CFG[config/settings.py<br/>env vars / .env] -.-> API
 ```
 
-**What happens when you ask a question**
+Package dependencies point one way: `api` uses `rag` and `agent`; `agent` uses `rag.llm`; `rag` and `agent` use `config` and `logger`; `logger` uses `config`.
 
-1. You type a question in the page. The page sends it to the backend.
-2. The backend turns your question into numbers (an embedding).
-3. Vector Search returns the three stored pieces of your documents closest to it.
-4. The backend gives Gemini those pieces and your question: *"Answer using only this."*
-5. Gemini's answer travels back to your page.
+**Ask a question:** the page sends `POST /api/rag/ask`. The backend embeds the question, Vector Search returns the closest chunks, and Gemini answers from them.
 
-**What happens when you run an audit**
+**Run an audit:** `POST /api/agent/audit` runs the risk, tax and control agents in order. Each decides which tools to call. Then one plain Gemini call writes the memo. An audit makes roughly 11 or more Gemini calls (inferred from the code, not measured).
 
-1. You submit a purchase request.
-2. The *risk*, *tax* and *control* agents each read it. Each one decides which tools to use (for example, "check the exchange rate") and writes a short report.
-3. A final step reads the three reports and writes one memo with a decision: **approved**, **conditional hold**, or **rejected**.
+In Docker, one server serves both the API and the built web page on port 8080 (`backend/api/main.py:60-73`, `Dockerfile`).
 
----
+## Technology stack
 
-## Why is the code split into many files?
+| Technology | Role | Version |
+|---|---|---|
+| Python | Backend language | 3.12 (`requirements.txt` says "Tested with Python 3.12") |
+| FastAPI / uvicorn | Web API | 0.135.1 / 0.41.0 |
+| Pydantic / pydantic-settings | Request validation and settings | 2.12.5 / 2.15.0 |
+| LangChain (`langchain`, `-core`, `-classic`, `-community`, `-text-splitters`) | Agents, retrieval chain, PDF loading | 1.2.11 / 1.2.18 / 1.0.2 / 0.4.1 / 1.1.1 |
+| langchain-google-genai | Gemini chat model (API key) | 4.2.1 |
+| langchain-google-vertexai | Vertex AI embeddings and Vector Search | 3.2.2 |
+| langgraph | Engine behind `create_agent` (no graph code written here) | 1.1.6 |
+| google-cloud-aiplatform / google-cloud-storage | Google Cloud clients | 1.141.0 / 3.9.0 |
+| pypdf | PDF reading | 6.7.5 |
+| structlog | JSON logging | 26.1.0 |
+| React / Vite / TypeScript | Frontend | React ^18.3.1, Vite 5.4.21 (built), TypeScript ^5.8.3 |
+| Tailwind CSS, shadcn/ui (Radix) | Styling and components | Tailwind ^3.4.17 |
+| Vitest, ESLint, Playwright | Frontend test and lint tools | vitest 3.2.4 |
+| Docker, Cloud Run, Secret Manager, GitHub Actions | Packaging and deployment | see [Deployment](#deployment-and-cost) |
 
-You could put everything in one file. For a ten-line experiment that is fine. For a real app it becomes a problem. Think of a kitchen where everyone cooks on one table: you cannot find anything, people get in each other's way, and one spill ruins every dish.
+Backend versions are pinned in `requirements.txt`. Whether all pinned versions install together is **not yet verified**. Frontend dependencies use `^` ranges with `package-lock.json`.
 
-The app is split so that **each folder and file has one job**, like stations in a kitchen:
+## Prerequisites
 
-| Problem with one big file | How splitting helps |
-|---|---|
-| Hard to find things ("where is the tax prompt?") | The name tells you where to look |
-| Changing one thing can break another | A change stays inside its own file |
-| Hard to test ("it needs the internet just to start") | Parts can be tested alone |
-| Copy-pasted code drifts apart | One function is written once and reused |
-| Many people editing the same file clash | People work in different files |
-| Intimidating to read | Read one small file at a time |
+| For | You need | Status on the machine used |
+|---|---|---|
+| Backend | **Python 3.12** (not enforced by the repo) | Not installed |
+| Frontend | **Node 20+** (the Dockerfile builds with Node 20) | Verified on Node v25.5.0, npm 11.10.0 |
+| Everything | Git | 2.52.0 |
+| Audit feature | A Gemini API key (link taken from the original README, not checked: https://aistudio.google.com/apikey) | Not used yet |
+| Document Q&A | A Google Cloud project with a Vector Search index and endpoint ([DEPLOY.md](DEPLOY.md)) | Not used |
+| Docker run | Docker | 29.2.0 present; build not run |
 
-**Rule of thumb:** *one file, one job.* The web layer does not know how AI works. The AI code does not know what a web address is.
+## Quick start
 
----
+Run backend commands from the repository root. Settings read `.env` from the current directory.
 
-## What's in this repo
+### Frontend (verified on Windows PowerShell)
 
-```
-backend/                      The Python server
-├── api/                      The "waiter": web addresses and rules
-│   ├── main.py                 Creates the app and plugs everything together
-│   ├── endpoints.py            Every web address (e.g. POST /api/rag/ask)
-│   └── schemas.py              The shape of requests and replies (the order forms)
-├── rag/                      Document Q&A (the "library")
-│   ├── llm.py                  Gets the Gemini chat model
-│   ├── embeddings.py           Text → numbers
-│   ├── vector_store.py         Connects to Vector Search
-│   ├── data_ingestion.py       PDF → pieces → stored
-│   └── retrieval.py            Question → find pieces → answer
-├── agent/                    The purchase audit
-│   ├── tools.py                The five tools agents can use
-│   ├── prompts.py              The written instructions for each agent
-│   └── agents.py               Creates the agents and runs them in order
-├── config/settings.py        Reads settings (keys, names) from outside the code
-├── logger/custom_logger.py   The app's diary (JSON log lines)
-└── tests/                    Automatic checks that need no accounts
-
-frontend/                     The web page (React + TypeScript)
-└── src/lib/api.ts            The only file that talks to the backend
-
-sample_docs/                  Four made-up PDFs to try the app with
-.github/workflows/deploy.yml  Robot that sets up the cloud and deploys the app
-Dockerfile                    Recipe to pack the app into one box
-requirements.txt              Python packages (exact versions)
-.env.example                  Template for your private settings
-DEPLOY.md                     How to put the app on the internet
+```powershell
+cd frontend
+npm ci          # installs 498 packages from package-lock.json
+npm test        # vitest: 1 test passes
+npm run build   # writes frontend/dist
 ```
 
-Each package depends only on the ones below it:
+`npm run lint` currently **fails** (9 errors, 7 warnings in existing code). `npm ci` reports 33 audit findings; nothing has been upgraded.
 
-```
-api  →  rag, agent  →  config, logger
-```
+### Backend (documented, not yet verified)
 
----
-
-## Run it on your computer
-
-### What you need
-
-| For | You need |
-|---|---|
-| Everything | **Python 3.12**, **Git**. For the web page also **Node.js 20+** |
-| The audit feature | A free **Gemini API key** from https://aistudio.google.com/apikey |
-| Document Q&A | A **Google Cloud** project (see [DEPLOY.md](DEPLOY.md)) |
-
-### Quick start: the audit (about 10 minutes, no Google Cloud)
-
-```bash
-# 1. Get the code (or download the ZIP from GitHub and unzip it)
-git clone https://github.com/mayank953/meridian-ai-learner.git
-cd meridian-ai-learner
-
-# 2. Make a private Python environment and install the packages
-python3.12 -m venv .venv
-source .venv/bin/activate            # Windows PowerShell: .venv\Scripts\Activate.ps1
+```powershell
+python -m venv .venv
+.venv\Scripts\Activate.ps1
 pip install -r requirements-dev.txt
-
-# 3. Create your settings file and add your Gemini key
-cp .env.example .env                 # Windows: copy .env.example .env
-#    open .env and set:  GOOGLE_API_KEY=your-key
-
-# 4. Start the backend
+copy .env.example .env          # then edit .env and set GOOGLE_API_KEY
 uvicorn api.main:app --app-dir backend --reload --port 8080
 ```
 
-Now open **http://localhost:8080/docs**. This page is made automatically by FastAPI and lets you try every address:
+Then open **http://localhost:8080/docs** (the API docs FastAPI generates). `GET /api/health` should return `{"status": "ok"}` even with no `.env`, because clients connect lazily on first use (INFERRED from the code at `backend/rag/llm.py:12` and `backend/api/endpoints.py:41`; not run).
 
-1. Open `GET /api/health` → **Try it out** → **Execute**. You should see `{"status": "ok"}`.
-2. Open `POST /api/agent/audit` → **Try it out**. Paste a request such as:
-   ```json
-   {"request_text": "Purchase of 200 PLC controllers from Takumi Controls Europe B.V. (Netherlands). Total 480,000 EUR. Origin JP, destination DE. FX rate quoted: 1 EUR = 163.5 JPY."}
-   ```
-   Press **Execute** and wait: several AI calls are happening, so it can take up to a minute or more.
-3. You get four texts: risk, tax and control reports, and the CFO memo. Wording changes each time (an AI writes it), but the layout stays the same.
+### Run the web page in development (not yet verified)
 
-> Run every command from the project's main folder. The app looks for `.env` in the folder where you start it.
-
-### Add the web page (optional)
-
-Open a **second terminal** and keep the backend running:
-
-```bash
+```powershell
 cd frontend
-npm install
-npm run dev
+npm run dev     # serves on http://localhost:3000
 ```
 
-Open **http://localhost:3000**.
+In development the page calls `http://localhost:8080` unless `VITE_API_URL` is set (`frontend/src/lib/api.ts:5`).
 
-### Try document Q&A
+### Docker (not yet verified)
 
-This needs the cloud setup in [DEPLOY.md](DEPLOY.md). Once your `.env` has the Google Cloud values:
-
-1. Upload the PDFs in `sample_docs/` (Index Documents tab, or `POST /api/rag/upload`).
-2. Ask: *"What is Aldermoor Industries total revenue in FY2024?"* → about **EUR 2.84 billion**.
-   Also try: *payment terms for servo motor suppliers* (Net-45), *customs duty on PLC controllers from Japan* (2.2 %), *depreciation of filling line equipment* (10 years).
-3. Ask something that is not in the documents. The answer should say it does not know.
-
-### Check that everything is wired up
-
-```bash
-pytest backend/tests
-```
-
-Expected: `9 passed`. These tests need no accounts and no internet.
-
-### Run it in Docker (optional)
-
-```bash
+```powershell
 docker build -t meridian-ai .
 docker run -p 8080:8080 --env-file .env meridian-ai
 ```
 
-Then open http://localhost:8080. (The box does not contain your `.env`, so you pass it in. For document Q&A you must also give it Google Cloud credentials; see [DEPLOY.md](DEPLOY.md).)
+`--env-file .env` puts your secrets into the container. The image does not contain `.env` (`.dockerignore`).
 
----
+## Configuration
 
-## Why would you need the cloud?
+Settings are read from environment variables, then from `.env` in the current directory (`backend/config/settings.py:31-35`). Never commit `.env` (it is git-ignored). Use placeholders like these, never real values.
 
-You do **not** need it for the audit. You do for these reasons:
+| Variable | Required? | Purpose | Example placeholder |
+|---|---|---|---|
+| `GOOGLE_API_KEY` | Required for audit and Q&A answers | Gemini API key | `<your-gemini-api-key>` |
+| `GCP_PROJECT_ID` | Required for Q&A and uploads | Google Cloud project | `<your-gcp-project-id>` |
+| `GCP_REGION` | Required for Q&A | Region of Vertex AI resources | `us-central1` |
+| `GCS_BUCKET_NAME` | Required for Q&A and uploads | Bucket for uploads, index staging and logs | `<your-bucket-name>` |
+| `GCS_PREFIX` | Optional (code default empty) | Folder for uploads; keep the trailing `/` | `uploads/` |
+| `VECTOR_SEARCH_INDEX_ID` | Required for Q&A | Vector Search index ID | `<your-index-id>` |
+| `VECTOR_SEARCH_INDEX_ENDPOINT_ID` | Required for Q&A | Vector Search endpoint ID | `<your-endpoint-id>` |
+| `GCP_SERVICE_ACCOUNT_PATH` | Optional | Path to a key file; sets `GOOGLE_APPLICATION_CREDENTIALS` if the file exists | `<path-to-key.json>` |
+| `VERTEX_LLM_MODEL_NAME` | Optional | Gemini model. Default `gemini-3.8-flash` is **not verified to exist** | `<current-gemini-model>` |
+| `VERTEX_EMBEDDING_MODEL_NAME` | Optional | Embedding model; must output 768 dimensions. Default `text-embedding-005` | `text-embedding-005` |
+| `LLM_TEMPERATURE` | Optional | `0` gives the most repeatable answers (default `0`) | `0` |
+| `ENVIRONMENT` | Optional | Read into settings but not used by any code | `local` |
+| `PORT` | Docker only | Port the container listens on (default 8080) | `8080` |
+| `VITE_API_URL` | Optional, frontend build | Backend URL the page calls (set it if the backend is not on port 8080) | `http://localhost:8080` |
 
-| Reason | Explanation |
-|---|---|
-| **Document Q&A needs a vector database** | This app stores document meaning in **Google's Vertex AI Vector Search**, which exists only in Google Cloud. There is no local copy. |
-| **Sharing** | On your laptop, only you can open `localhost`. In the cloud, anyone with the link can. |
-| **Always on** | Your laptop sleeps and goes offline. A cloud service keeps running. |
-| **Automatic delivery** | Each time you save changes, a robot can rebuild and publish the app. |
-| **Scaling** | Many users at once? The cloud can start more copies. |
+There are no settings for log level or log folder; they are fixed in code (INFO, `./logs`).
 
-**It costs money.** The vector database is billed **by the hour while it is running, even if nobody uses it.** New Google Cloud customers get a **$300 credit for 90 days**. [DEPLOY.md](DEPLOY.md) explains the costs, how to set a budget alert, and how to switch everything off.
+## Usage
 
----
+All examples are **not yet run**. Audit and Q&A calls use Google services and can cost money or hit rate limits.
 
-## Settings
+**Health and status (free, local):**
+```powershell
+Invoke-RestMethod http://localhost:8080/api/health
+Invoke-RestMethod http://localhost:8080/api/status
+```
 
-Settings live in `.env` (copy `.env.example`). `.env` is never uploaded to Git.
+**Audit (needs `GOOGLE_API_KEY`; sends the text to Google; allow a minute or more):**
+```powershell
+$body = '{"request_text": "Purchase of 200 PLC controllers from Takumi Controls Europe B.V. (Netherlands). Total 480,000 EUR. Origin JP, destination DE. FX rate quoted: 1 EUR = 163.5 JPY."}'
+Invoke-RestMethod -Method Post -Uri http://localhost:8080/api/agent/audit -ContentType "application/json" -Body $body
+```
+The reply has `risk_result`, `tax_result`, `control_result` and `cfo_memo`. Wording varies between runs.
 
-| Setting | Meaning | Needed for |
-|---|---|---|
-| `GOOGLE_API_KEY` | Your Gemini key | Everything with AI |
-| `GCP_PROJECT_ID` | Your Google Cloud project | Document Q&A |
-| `GCP_REGION` | Where it runs, e.g. `us-central1` | Document Q&A |
-| `GCS_BUCKET_NAME` | Cloud Storage bucket name | Document Q&A |
-| `GCS_PREFIX` | Folder for uploads, `uploads/` | Document Q&A |
-| `VECTOR_SEARCH_INDEX_ID` | ID of your vector index | Document Q&A |
-| `VECTOR_SEARCH_INDEX_ENDPOINT_ID` | ID of its endpoint | Document Q&A |
-| `GCP_SERVICE_ACCOUNT_PATH` | Path to your key file (optional) | Document Q&A on your computer |
-| `VERTEX_LLM_MODEL_NAME` | Chat model, default `gemini-3.8-flash` | Optional |
-| `VERTEX_EMBEDDING_MODEL_NAME` | Embedding model, default `text-embedding-005` | Optional |
-| `LLM_TEMPERATURE` | `0` = most repeatable answers | Optional |
+**Index documents (needs Google Cloud):**
+```powershell
+curl.exe -F "files=@sample_docs/aldermoor_procurement_policy.pdf" http://localhost:8080/api/rag/upload
+Invoke-RestMethod -Method Post -Uri http://localhost:8080/api/rag/ingest-gcs
+```
+(`curl.exe` being present on your machine is NOT VERIFIED; the upload field name `files` comes from `backend/api/endpoints.py:123`.)
 
-> AI model names are retired from time to time. If you see "model not found", look up a current name at https://ai.google.dev/gemini-api/docs/models and set `VERTEX_LLM_MODEL_NAME`.
+**Ask a question (needs Google Cloud and documents indexed):**
+```powershell
+Invoke-RestMethod -Method Post -Uri http://localhost:8080/api/rag/ask -ContentType "application/json" -Body '{"query": "What are the standard payment terms for servo motor suppliers?", "retriever_type": "similarity"}'
+```
+`retriever_type` is `similarity` (default), `multiquery` or `contextual`; any other value falls back to `similarity`.
 
----
+**Other routes:** `GET /api/rag/uploads` lists uploads from the current session (kept in memory, lost on restart).
 
-## Common problems
+**Script:** from the `backend` folder, `python -m agent.agents` runs a built-in sample audit and prints the memo.
+
+## Project structure
+
+```
+backend/
+├── api/            main.py (app wiring, CORS, serves the built frontend), endpoints.py (routes), schemas.py
+├── rag/            llm.py, embeddings.py, vector_store.py, data_ingestion.py, retrieval.py
+├── agent/          agents.py (supervisor), tools.py (5 tools), prompts.py
+├── config/         settings.py (environment settings)
+├── logger/         custom_logger.py (JSON logs, upload to GCS on exit)
+└── tests/          conftest.py (fake env), test_api.py
+frontend/           React + TypeScript + Vite; src/lib/api.ts is the only backend client
+sample_docs/        Four fictional PDFs
+docs/               Discovery notes and setup-log.md
+.github/workflows/  deploy.yml
+Dockerfile, requirements.txt, requirements-dev.txt, .env.example, DEPLOY.md
+```
+
+## Testing
+
+Backend (not yet run on this machine):
+```powershell
+pytest backend/tests
+```
+`test_api.py` contains 9 tests (health, status, 404, ask, audit, non-PDF upload, chunking, sample PDFs, log severity). They fake all external calls and need no accounts or network. Run them in a shell without `GCP_PROJECT_ID` set, because one test expects the fake value `test-project`. They do not exercise Gemini, Vector Search, Cloud Storage or document ingestion.
+
+Frontend (verified): `cd frontend; npm test` passes 1 test. `npm run lint` currently fails.
+
+## Deployment and cost
+
+`.github/workflows/deploy.yml` runs on **every push to `main`** (and manually). If its GitHub secrets are set, it:
+- creates a Vector Search index and endpoint, **billed by the hour even when idle**;
+- stores your Gemini key in Secret Manager;
+- deploys a **public Cloud Run service with no login** (anyone with the URL can use your Gemini quota and upload files).
+
+Read [DEPLOY.md](DEPLOY.md) first: it explains costs, budget alerts and how to switch everything off. Work on other branches if you do not want to deploy. The workflow has no test step.
+
+## Troubleshooting
 
 | What you see | What to do |
 |---|---|
-| `ModuleNotFoundError: No module named 'api'` | Run from the main folder and keep `--app-dir backend` |
-| Settings seem empty | Run from the main folder (where `.env` is) |
-| `ModuleNotFoundError` for other packages | Activate the environment (`source .venv/bin/activate`) and run `pip install -r requirements.txt` |
-| `index_id is required` | Set `VECTOR_SEARCH_INDEX_ID` and `VECTOR_SEARCH_INDEX_ENDPOINT_ID` |
-| `403` from Google Cloud | Your login or key lacks permission, or the wrong account is used; see [DEPLOY.md](DEPLOY.md) |
-| "model not found" | Change `VERTEX_LLM_MODEL_NAME` to a current model |
-| Port already in use | Stop the other program, or use `--port 8081` |
-| Browser says "blocked by CORS" | The backend is not running on port 8080 |
+| `python` or `py` not found | Python 3.12 is not installed; install it first |
+| `ModuleNotFoundError: No module named 'api'` | Run from the repo root and keep `--app-dir backend` |
+| Settings seem empty | Run from the repo root; `.env` is looked up in the current directory |
+| AI features fail with auth or "model not found" errors | Check `GOOGLE_API_KEY`; set `VERTEX_LLM_MODEL_NAME` to a current model (default not verified) |
+| Q&A returns 500 | Index ID, endpoint ID, project, region or bucket are unset or wrong; a 403 usually means the wrong account or key (see the troubleshooting table in `DEPLOY.md:211`; not reproduced here) |
+| Audit returns text saying "Manual review required" | A tool's AI call failed and the tool degraded instead of raising; check the logs |
+| Port already in use | Stop the other program, or use `--port 8081` and set `VITE_API_URL` |
+| Page shows "Failed to fetch" | The backend is not running, or `VITE_API_URL` points to the wrong address |
+| PowerShell shows `NativeCommandError` for npm warnings | Check `$LASTEXITCODE`; the warnings are not failures |
+| `npm run lint` fails | Known: existing code has 16 lint problems |
 
-When something fails, read the last lines in the terminal. The app writes a diary of what it did as one JSON line per event; the error is usually there.
+The backend logs one JSON line per event to the console and to `logs/<timestamp>.log`. These logs include full queries, answers and audit text, so treat them as sensitive.
+
+## Contributing
+
+- Work on a branch; do not push to `main` unless you intend to deploy.
+- Keep changes small, one logical change per commit, and run the tests before and after.
+- Never commit `.env`, keys or credentials; use placeholders in docs and examples.
+- Follow the existing style: thin routes, `from logger import GLOBAL_LOGGER as log`, settings via `config.settings`, and tests with fakes (see `CLAUDE.md`).
+- Do not upgrade dependencies without discussing it first.
+- Record notable decisions and command results in `docs/setup-log.md`.
 
 ---
 

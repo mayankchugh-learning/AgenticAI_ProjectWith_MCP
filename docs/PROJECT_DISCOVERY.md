@@ -1,5 +1,7 @@
 # PROJECT_DISCOVERY — Meridian AI (read-only discovery)
 
+> **Note on `README.md:<line>` citations in this file:** they refer to the ORIGINAL README (commit `c2bbced`, 276 lines). `README.md` was rewritten afterwards, so its line numbers no longer match. View the original with `git show c2bbced:README.md`.
+
 Status: **PROPOSAL / PLAN. Nothing in the repo has been changed, run, installed or built** except `.claude/settings.json` and files under `docs/`.
 Evidence convention: `file:line` citations come from reading the code. **INFERRED** = reasoned from code, not observed. **NOT VERIFIED** = could not confirm without running or without access. No secret values were read; `.env` was never opened; `.env.example` was inspected for variable *names* only.
 

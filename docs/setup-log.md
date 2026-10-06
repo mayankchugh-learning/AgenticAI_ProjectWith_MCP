@@ -48,3 +48,18 @@ Notes:
 - Step 4 in `frontend/`: `npm ci` OK (498 packages, exit 0; npm audit reports 33 vulnerabilities: 1 low, 11 moderate, 18 high, 3 critical — NOT fixed, no upgrades); `npm run lint` FAILED exit 1 (16 problems: 9 errors, 7 warnings; errors seen: no-empty-object-type, no-require-imports in tailwind.config.ts:91); `npm test` OK (1 test passed, vitest 3.2.4); `npm run build` OK (vite 5.4.21, 1681 modules, dist/ created, git-ignored).
 - Caveat: ran on Node 25.5.0, whereas the Dockerfile builds with Node 20 (Dockerfile:1); results on Node 20 NOT VERIFIED. Deprecation warning for `punycode` seen (harmless).
 - `git status` after step 4: only docs/setup-log.md modified; node_modules and dist are ignored.
+
+## 2026-10-06 — CLAUDE.md rewritten
+
+- Rewrote CLAUDE.md at the owner's request (explicit exception to the docs/-only rule), on branch scratch/explore. Commands section lists only what ran: npm ci, npm test, npm run build; npm run lint is listed as failed; backend and type-check commands are listed as NOT VERIFIED. Not committed, not pushed.
+
+## 2026-10-06 — README.md rewritten
+
+- Rewrote README.md at the owner's request (explicit exception to the docs/-only rule) on scratch/explore. Frontend commands marked verified (npm ci/test/build); backend, dev server, Docker, and all API usage examples marked NOT YET VERIFIED (Python not installed). Not committed, not pushed.
+
+## 2026-10-06 — New docs and re-verification pass
+
+- Created docs/ARCHITECTURE.md, docs/REFERENCE.md, docs/ONBOARDING.md, docs/OPERATIONS.md (not committed). DEPLOYMENT.md intentionally not written yet.
+- Re-verified CLAUDE.md, README.md and docs/*.md: (1) every backticked file name resolves to a tracked/untracked file except docs/DEPLOYMENT.md (planned), backend/tests/test_llm.py (proposed example), init_embeddings.json (CI-generated, not in repo); (2) every UPPER_CASE env-like token is a settings alias, a known extra (PORT, VITE_API_URL, GOOGLE_APPLICATION_CREDENTIALS, GCP_CREDENTIALS_JSON) or a code constant; (3) ports: 8080 (Dockerfile:38,42; main.py:5; deploy.yml:233) and 3000 (frontend/vite.config.ts:10) confirmed; 8081 is only a suggested alternative.
+- Claims fixed: README health-without-.env now marked INFERRED; README tab wording narrowed (Index.tsx not read); curl.exe, API-key URL and 403 explanation marked NOT VERIFIED/sourced; CLAUDE.md stale README line pointer replaced; PROJECT_DISCOVERY.md and UNDERSTANDING.md got a note that their README.md:<line> citations refer to the original README at c2bbced (rewritten since).
+- Still NOT VERIFIED by design: all backend commands (no Python), the 9 pytest tests, npm run dev, Docker build, every API example, all library behaviour.
