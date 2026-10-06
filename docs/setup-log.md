@@ -36,3 +36,7 @@ Notes:
 - A comprehension quiz (15 questions) was started in chat; the doc contains answers, so it was written before the quiz began.
 
 - 2026-10-06 user-requested: git add . + git commit on branch main (4 files: CLAUDE.md, docs/*). Push NOT performed: pushes to main trigger deploy.yml:3-7 (paid GCP provisioning); awaiting confirmation.
+
+- Created branch scratch/explore from main at b1c7b54 (user-provided workflow, step 1 only). Branch claude/analysis does not exist locally or on origin. No logging added, nothing run, nothing pushed.
+
+- User asked for git push (after earlier "do not push"). Pushed ONLY branch scratch/explore (commit b1c7b54) to origin with upstream tracking. main was NOT pushed, so deploy.yml (triggers on main) was not started. The uncommitted setup-log line was not included.
