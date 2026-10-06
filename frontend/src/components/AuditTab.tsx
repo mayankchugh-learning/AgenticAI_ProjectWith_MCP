@@ -52,22 +52,13 @@ export default function AuditTab() {
     setMemo(null);
     setError(null);
     setExpandedPhase(null);
+    // The server reports no per-step progress, so every phase stays "pending" until the response arrives.
     setPhases([
-      { name: "Risk & Compliance", status: "running", content: null },
+      { name: "Risk & Compliance", status: "pending", content: null },
       { name: "Tax & Treasury", status: "pending", content: null },
       { name: "Financial Control", status: "pending", content: null },
       { name: "CFO Synthesis", status: "pending", content: null },
     ]);
-
-    const timer1 = setTimeout(() => {
-      setPhases((p) => p.map((ph, i) => (i === 0 ? { ...ph, status: "done" } : i === 1 ? { ...ph, status: "running" } : ph)));
-    }, 3000);
-    const timer2 = setTimeout(() => {
-      setPhases((p) => p.map((ph, i) => (i <= 1 ? { ...ph, status: "done" } : i === 2 ? { ...ph, status: "running" } : ph)));
-    }, 6000);
-    const timer3 = setTimeout(() => {
-      setPhases((p) => p.map((ph, i) => (i <= 2 ? { ...ph, status: "done" } : i === 3 ? { ...ph, status: "running" } : ph)));
-    }, 9000);
 
     try {
       const data = await runAudit(request);
@@ -83,9 +74,6 @@ export default function AuditTab() {
       setError(err.message);
       setPhases((p) => p.map((ph) => (ph.status === "running" ? { ...ph, status: "error" } : ph)));
     } finally {
-      clearTimeout(timer1);
-      clearTimeout(timer2);
-      clearTimeout(timer3);
       setLoading(false);
     }
   };
@@ -290,7 +278,7 @@ export default function AuditTab() {
                   <span>4 Agents · Sequential</span>
                   <div className="flex items-center gap-1.5">
                     <span className="h-1.5 w-1.5 rounded-full bg-success animate-pulse" />
-                    All Passed
+                    Complete
                   </div>
                 </div>
               </CardFooter>

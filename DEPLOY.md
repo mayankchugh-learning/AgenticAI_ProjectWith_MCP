@@ -127,7 +127,7 @@ In your fork: **Settings → Secrets and variables → Actions → New repositor
 
 ### Step 9 · Run the workflow
 
-**Actions → Deploy to GCP Cloud Run → Run workflow.** (It also starts by itself whenever you push to `main`.)
+**Actions → Deploy to GCP Cloud Run → Run workflow.** (It no longer starts by itself when you push to `main`; you always start it here.)
 
 It does these jobs in order:
 

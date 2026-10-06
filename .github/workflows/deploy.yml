@@ -1,9 +1,7 @@
 name: Deploy to GCP Cloud Run
 
 on:
-  push:
-    branches:
-      - main
+  # Manual only: this workflow creates billed Google Cloud resources and a public service.
   workflow_dispatch:
 
 env:

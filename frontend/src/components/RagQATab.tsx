@@ -160,7 +160,7 @@ export default function RagQATab() {
                     {h.answer ? (
                       <div className="ml-11 p-5 rounded-xl bg-muted/40 border border-border/50 shadow-sm relative group overflow-hidden">
                         <div className="absolute top-0 left-0 w-1 h-full bg-primary/20 group-hover:bg-primary/50 transition-colors" />
-                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary/70 mb-3 ml-1">Verified Answer</p>
+                        <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-primary/70 mb-3 ml-1">AI-generated answer</p>
                         <p className="text-sm text-card-foreground leading-relaxed whitespace-pre-wrap">{h.answer}</p>
                       </div>
                     ) : h.error ? (
