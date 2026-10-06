@@ -63,3 +63,10 @@ Notes:
 - Re-verified CLAUDE.md, README.md and docs/*.md: (1) every backticked file name resolves to a tracked/untracked file except docs/DEPLOYMENT.md (planned), backend/tests/test_llm.py (proposed example), init_embeddings.json (CI-generated, not in repo); (2) every UPPER_CASE env-like token is a settings alias, a known extra (PORT, VITE_API_URL, GOOGLE_APPLICATION_CREDENTIALS, GCP_CREDENTIALS_JSON) or a code constant; (3) ports: 8080 (Dockerfile:38,42; main.py:5; deploy.yml:233) and 3000 (frontend/vite.config.ts:10) confirmed; 8081 is only a suggested alternative.
 - Claims fixed: README health-without-.env now marked INFERRED; README tab wording narrowed (Index.tsx not read); curl.exe, API-key URL and 403 explanation marked NOT VERIFIED/sourced; CLAUDE.md stale README line pointer replaced; PROJECT_DISCOVERY.md and UNDERSTANDING.md got a note that their README.md:<line> citations refer to the original README at c2bbced (rewritten since).
 - Still NOT VERIFIED by design: all backend commands (no Python), the 9 pytest tests, npm run dev, Docker build, every API example, all library behaviour.
+
+## 2026-10-07 — Audit and improvement plan
+
+- Created docs/AUDIT.md (63 findings: 0 critical, 4 high, 31 medium, 24 low, 4 informational) and docs/IMPROVEMENT_PLAN.md. Nothing implemented. Not committed.
+- Secret scan: git grep for key/token patterns over tracked files printing file:line only; no hardcoded secrets found (one false positive, a Secret Manager reference at deploy.yml:236). The first private-key pattern attempt failed because git grep parsed it as an option; re-run with -e found none. .env was never opened; .env.example values were not viewed.
+- No scanners run. Proposed (awaiting approval): npm audit [--omit=dev] in frontend/; pip-audit -r requirements.txt (needs Python + install of pip-audit).
+- Limits: backend never run (no Python); frontend components DocumentUploadTab, SystemStatusTab, Index.tsx, ui/*, tsconfig and Playwright files not read.
