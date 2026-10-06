@@ -1,3 +1,9 @@
+"""Prompt text for the three specialist agents and the CFO synthesis step (strings only, no logic).
+
+The text is sent to Gemini exactly as written, so changing a word changes agent behaviour.
+SYNTHESIS_PROMPT_TEMPLATE is filled with str.format() in agent/agents.py, so any literal curly
+brace added to it would have to be doubled ({{ and }}).
+"""
 # ==========================================
 # SPECIALIST AGENT PROMPTS — ALDERMOOR INDUSTRIES
 # ==========================================

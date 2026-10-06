@@ -27,6 +27,7 @@ from logger import GLOBAL_LOGGER as log
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    """Startup and shutdown hook. Nothing runs at startup; the log upload runs at shutdown."""
     yield  # the app runs here
     # Shutdown: flush logs to GCS (critical on Cloud Run, whose disk disappears)
     _LOGGER_INSTANCE.flush_to_gcs()
@@ -39,6 +40,7 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+# CORS: every origin, method and header is allowed, with credentials (see "Tighten in production" below).
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],            # Tighten in production
@@ -47,6 +49,7 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# The /api/* routes are registered before the catch-all frontend route at the bottom of this file.
 app.include_router(health_router)
 app.include_router(status_router)
 app.include_router(agent_router)
@@ -65,9 +68,12 @@ if os.path.exists(frontend_dist):
     # Catch-all: serve a real file if it exists, otherwise index.html (React handles the route)
     @app.get("/{catchall:path}", include_in_schema=False)
     def serve_frontend(catchall: str):
+        """Serve a built frontend file, or index.html for any other path (the React app handles routing)."""
+        # Unknown /api/... paths must return a 404 instead of the web page.
         if catchall.startswith("api/"):
             raise HTTPException(status_code=404, detail="Not found")
         file_path = os.path.realpath(os.path.join(frontend_dist, catchall))
+        # Only serve files that really live inside frontend_dist (blocks "../" path traversal).
         if file_path.startswith(frontend_dist + os.sep) and os.path.isfile(file_path):
             return FileResponse(file_path)
         return FileResponse(os.path.join(frontend_dist, "index.html"))

@@ -24,6 +24,7 @@ CHUNK_OVERLAP = 100  # neighbouring chunks share 100 characters so sentences are
 
 
 def split_into_chunks(pages: list[Document]) -> list[Document]:
+    """Split page documents into chunks of at most CHUNK_SIZE characters; metadata is kept on each chunk."""
     splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNK_SIZE, chunk_overlap=CHUNK_OVERLAP)
     return splitter.split_documents(pages)
 
@@ -33,6 +34,8 @@ def ingest_pdf(local_path: str, source: str) -> dict:
 
     `source` is saved in each chunk's metadata so answers can be traced back to a file.
     """
+    # One Document per PDF page. A scanned (image-only) PDF has no text, so it produces
+    # zero chunks (api/endpoints.py reports that case as "skipped").
     pages = PyPDFLoader(local_path).load()
     for page in pages:
         page.metadata["source"] = source
@@ -54,6 +57,8 @@ def ingest_data_from_gcs() -> dict:
     totals = {"files": 0, "pages": 0, "chunks": 0}
     tmp_dir = tempfile.mkdtemp()
     try:
+        # Files are downloaded and indexed one at a time. Nothing here checks whether a file
+        # was already indexed before, so there is no protection against indexing it twice.
         for blob in blobs:
             if not blob.name.lower().endswith(".pdf"):
                 continue

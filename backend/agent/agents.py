@@ -35,6 +35,12 @@ def create_specialized_agent(tools, system_prompt):
 
 
 class ProcurementSupervisor:
+    """Runs the three specialist agents in order, then writes the CFO memo.
+
+    One instance is built on the first audit request and shared by later requests
+    (see get_supervisor() in api/endpoints.py).
+    """
+
     def __init__(self):
         self.llm = get_llm()
         self.risk_agent = create_specialized_agent(
@@ -54,6 +60,12 @@ class ProcurementSupervisor:
         return extract_text(result["messages"][-1].content)
 
     def run_audit(self, request: str) -> dict:
+        """Audit one purchase request and return its four texts.
+
+        Returns a dict with the keys risk_result, tax_result, control_result and cfo_memo.
+        The agents run one after another, not in parallel, and every phase result is logged
+        in full. Exceptions are not caught here; the API route turns them into HTTP 500.
+        """
         log.info("Starting audit phase", phase="1 - Risk & Compliance")
         risk_result = self._invoke_agent(self.risk_agent, request)
         log.info("Phase complete", phase="Risk & Compliance", result=risk_result)

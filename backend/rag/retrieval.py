@@ -13,6 +13,8 @@ from logger import GLOBAL_LOGGER as log
 from rag.llm import get_llm
 from rag.vector_store import get_vector_store
 
+# Sent to Gemini as the system message. {context} is filled with the retrieved chunks by the
+# chain built in ask_question(). The wording is model-visible, so changing it changes the answers.
 SYSTEM_PROMPT = (
     "You are a helpful assistant for question-answering tasks. "
     "Use the following pieces of retrieved context to answer the question. "
@@ -50,8 +52,11 @@ def build_retriever(retriever_type: str = "similarity"):
 
 def ask_question(query: str, retriever_type: str = "similarity") -> str:
     """Answer a question using the documents stored in Vector Search."""
+    # The query is logged in full here, and the answer in full below.
     log.info("RAG query received", query=query, retriever_type=retriever_type)
 
+    # The prompt and both chains are rebuilt on every call. Only get_llm() and get_vector_store()
+    # are cached.
     prompt = ChatPromptTemplate.from_messages([
         ("system", SYSTEM_PROMPT),
         ("human", "{input}"),
@@ -64,4 +69,5 @@ def ask_question(query: str, retriever_type: str = "similarity") -> str:
 
     response = rag_chain.invoke({"input": query})
     log.info("RAG answer generated", answer=response["answer"])
+    # Only the answer text is returned to the caller.
     return response["answer"]

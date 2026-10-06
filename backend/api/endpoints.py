@@ -47,6 +47,7 @@ def get_supervisor() -> ProcurementSupervisor:
 # Health & status
 # ---------------------------------------------------------------------------
 
+# Liveness only: this does not check settings, Google Cloud or Gemini.
 @health_router.get("/health")
 def health():
     return {"status": "ok"}
@@ -101,6 +102,7 @@ def run_audit(payload: AuditRequest):
         result = get_supervisor().run_audit(payload.request_text)
         return AuditResponse(**result)
     except Exception as e:
+        # Any exception becomes HTTP 500, and the raw error text is returned to the caller.
         log.error("Audit failed", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -115,6 +117,7 @@ def rag_query(payload: QueryRequest):
     try:
         return QueryResponse(answer=ask_question(payload.query, payload.retriever_type))
     except Exception as e:
+        # Same pattern as the audit route: HTTP 500 with the raw error text.
         log.error("RAG query failed", error=str(e))
         raise HTTPException(status_code=500, detail=str(e))
 
@@ -130,6 +133,7 @@ async def upload_documents(files: list[UploadFile] = File(...)):
 
     try:
         for upload in files:
+            # Only the file name ending is checked, not the file content.
             if not upload.filename.lower().endswith(".pdf"):
                 results.append({
                     "filename": upload.filename,
@@ -150,6 +154,7 @@ async def upload_documents(files: list[UploadFile] = File(...)):
                 bucket.blob(gcs_path).upload_from_filename(local_path, content_type="application/pdf")
                 log.info("File saved to GCS", filename=upload.filename, gcs_path=f"gs://{settings.GCS_BUCKET_NAME}/{gcs_path}")
             except Exception as gcs_err:
+                # A failed copy is only logged; the file is still indexed below.
                 log.warning("Could not save to GCS", error=str(gcs_err))
 
             # ingest_pdf is slow and blocking, so run it in a worker thread to keep the server responsive
@@ -172,6 +177,8 @@ async def upload_documents(files: list[UploadFile] = File(...)):
     finally:
         shutil.rmtree(tmp_dir, ignore_errors=True)
 
+    # Reached only if every file was processed without an exception. If one file raises, the
+    # results of the files before it are not recorded here (they may already be indexed).
     _upload_history.extend(results)
     return {"results": results}
 

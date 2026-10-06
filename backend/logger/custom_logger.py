@@ -1,3 +1,8 @@
+"""JSON logging: console and a local file, plus an upload of that file to Cloud Storage.
+
+The module-level instance is created in logger/__init__.py. Log lines are structlog
+events rendered as JSON, one per line.
+"""
 import os
 import atexit
 import logging
@@ -20,8 +25,10 @@ def add_severity(logger, method_name, event_dict):
 
 
 class CustomLogger:
+    """Owns one timestamped log file for the life of the process and uploads it on exit."""
+
     def __init__(self, log_dir="logs"):
-        # Ensure logs directory exists
+        # Ensure logs directory exists (created under the current working directory)
         self.logs_dir = os.path.join(os.getcwd(), log_dir)
         os.makedirs(self.logs_dir, exist_ok=True)
 
@@ -36,6 +43,11 @@ class CustomLogger:
         atexit.register(self.flush_to_gcs)
 
     def get_logger(self, name=__file__):
+        """Configure logging and return a structlog logger named after `name`.
+
+        This changes global settings (Python's root logging handlers and structlog's
+        configuration), so it is meant to be called once, from logger/__init__.py.
+        """
         logger_name = os.path.basename(name)
 
         # Configure logging for console + file (both JSON)
@@ -53,7 +65,9 @@ class CustomLogger:
             handlers=[console_handler, file_handler]
         )
 
-        # Configure structlog for JSON structured logging
+        # Configure structlog for JSON structured logging.
+        # Processors run in order: add an ISO UTC timestamp, add the level, copy it to
+        # "severity" for Cloud Logging, rename the message key to "event", render as JSON.
         structlog.configure(
             processors=[
                 structlog.processors.TimeStamper(fmt="iso", utc=True, key="timestamp"),
@@ -74,7 +88,8 @@ class CustomLogger:
             return
 
         try:
-            
+            # `settings` is already imported at the top of this module, so the `except`
+            # branch below (raw environment variables) is unlikely to run.
             gcs_bucket = settings.GCS_BUCKET_NAME
             gcp_project = settings.GCP_PROJECT
         except Exception:

@@ -1,3 +1,13 @@
+"""The five tools the specialist agents can call (see agent/agents.py).
+
+Four of them (sanctions screen, credit score, cross-border tax, expense classification)
+ask Gemini from its general knowledge; none of them looks anything up in a real data source.
+validate_fx_hedge first asks api.frankfurter.dev for a live exchange rate and only falls
+back to Gemini if that fails.
+
+The docstring of every @tool function below is sent to the model as the tool's description,
+so changing its wording changes what the agent sees.
+"""
 import json
 import requests
 from langchain_core.tools import tool
@@ -166,6 +176,7 @@ Respond ONLY with the JSON object, no other text."""
         return data
     except (json.JSONDecodeError, KeyError):
         # Fallback: return a safe dict with the raw response
+        # (a hard-coded 15% rate; only the "note" and "raw_response" fields mark it as a fallback)
         return {
             "tax_amount": amount * 0.15,
             "rate": 0.15,
@@ -210,6 +221,8 @@ Respond with ONLY a single number (the rate). For example, if 1 EUR = 91.5 INR, 
 
     # --- Calculate variance ---
     variance = abs(rate_used - market_rate) / market_rate
+    # The label below depends only on whether the pair could be parsed. It still says
+    # "live market" when the rate actually came from the Gemini fallback above.
     source = "live market" if base and quote else "estimated"
 
     if variance > 0.05:
