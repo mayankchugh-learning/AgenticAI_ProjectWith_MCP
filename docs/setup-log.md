@@ -40,3 +40,11 @@ Notes:
 - Created branch scratch/explore from main at b1c7b54 (user-provided workflow, step 1 only). Branch claude/analysis does not exist locally or on origin. No logging added, nothing run, nothing pushed.
 
 - User asked for git push (after earlier "do not push"). Pushed ONLY branch scratch/explore (commit b1c7b54) to origin with upstream tracking. main was NOT pushed, so deploy.yml (triggers on main) was not started. The uncommitted setup-log line was not included.
+
+## 2026-10-06 — Local setup: steps 0 and 4 (user approved steps 0, 2-4)
+
+- Step 0 (read-only): `py` launcher and `python` NOT FOUND in PowerShell; node v25.5.0, npm 11.10.0, Docker 29.2.0; PowerShell Process execution policy already Bypass.
+- Step 2 (Python venv/pip) NOT STARTED: Python 3.12 is not installed; installing it (winget, system-wide) is step 1 and needs explicit approval.
+- Step 4 in `frontend/`: `npm ci` OK (498 packages, exit 0; npm audit reports 33 vulnerabilities: 1 low, 11 moderate, 18 high, 3 critical — NOT fixed, no upgrades); `npm run lint` FAILED exit 1 (16 problems: 9 errors, 7 warnings; errors seen: no-empty-object-type, no-require-imports in tailwind.config.ts:91); `npm test` OK (1 test passed, vitest 3.2.4); `npm run build` OK (vite 5.4.21, 1681 modules, dist/ created, git-ignored).
+- Caveat: ran on Node 25.5.0, whereas the Dockerfile builds with Node 20 (Dockerfile:1); results on Node 20 NOT VERIFIED. Deprecation warning for `punycode` seen (harmless).
+- `git status` after step 4: only docs/setup-log.md modified; node_modules and dist are ignored.
