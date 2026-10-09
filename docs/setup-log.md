@@ -122,3 +122,30 @@ Notes:
 
 - Unstaged everything (`git restore --staged .`, index only), then made three commits on scratch/explore: (1) Q1/Q2/Q5 + characterization tests + DEPLOY.md trigger note; (2) docs (CLAUDE.md, README.md, docs/*); (3) backend docstrings/comments (14 files, no logic change).
 - Then `git push` of scratch/explore only. main was not pushed. Commit ids: see `git log --oneline`.
+
+## 2026-10-07 — Production Dockerfile (owner request; not built yet)
+
+- Rewrote Dockerfile in place and replaced .dockerignore (explicit owner request; DR-3/DR-4/DR-5 were PENDING in the plan, this request covers that scope). deploy.yml builds this Dockerfile with `gcloud builds submit`, but deploy is manual-only now (Q1).
+- Pinned tags verified to exist with `docker manifest inspect` (registry lookup only): python:3.12.10-slim-bookworm, node:20.19.5-alpine3.22.
+- Docker engine NOT running (Docker Desktop pipe missing), so nothing has been built or run. Waiting for the owner to approve the build/run commands and start Docker Desktop.
+- No docker-compose.yml: the backing services (Vertex AI Vector Search, Gemini, Cloud Storage) are Google-managed and have no local container equivalent, so compose would add nothing.
+
+## 2026-10-09 Docker build and run verification
+- Docker server 29.2.0. `docker build -t meridian-ai:local .` succeeded (local image only, not pushed).
+- Image check: runs as uid 10001 (`app`); `/app` holds only backend, frontend, logs; no `.env*` or `.git` found.
+- `docker run --env-file .env -p 8080:8080`: HEALTHCHECK reached `healthy` in about 25 s; `GET /api/health` returned `{"status":"ok"}`. Startup log showed no errors. `.env` was passed to Docker, not read or printed.
+- Only `/api/health` was called. No Gemini, Vertex AI, GCS or audit calls were made (whether startup touches Google Cloud is NOT VERIFIED).
+- Container `meridian-test` stopped and removed. Image `meridian-ai:local` kept.
+- No docker-compose.yml added: the only backing services are cloud-hosted, so none run locally.
+
+## 2026-10-09 docs/DEPLOYMENT.md written
+- Target chosen by owner: GCP Cloud Run. The staging/production split and Artifact Registry are my ASSUMPTIONS (the owner did not specify environments or registry); flagged in the document.
+- Sources read: `.github/workflows/deploy.yml`, `backend/config/settings.py`, `.env.example` (variable names only, values not shown), `docs/OPERATIONS.md`.
+- No cloud command, build or run in this step. All gcloud commands in the document are NOT VERIFIED.
+- The document records where `deploy.yml` differs from it (single env, gcr.io, public access, default compute service account).
+
+## 2026-10-09 docs/DEPLOYMENT.md rewritten for the owner's stated target
+- Owner target: Cloud Run in asia-east2, staging and production as two services, Artifact Registry, Secret Manager, GitHub Actions with Workload Identity Federation. This replaces the earlier entry's assumed target (us-central1 style, no WIF); that entry is left as written.
+- My assumptions (flagged in the document): one GCP project for both services, `-staging`/`-prod` resource suffixes, per-environment deployer service accounts, proposed (not added) `release.yml`.
+- Code fact checked: `GCP_REGION` is the Vertex region (`backend/rag/vector_store.py:15-19`), so Vector Search availability in asia-east2 must be confirmed (NOT VERIFIED).
+- No cloud command run; no workflow file added or changed.
