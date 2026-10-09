@@ -1,30 +1,55 @@
-# Python bytecode (stale Windows-compiled .pyc files break Linux containers)
-__pycache__/
-*.py[codz]
-*$py.class
+# Files excluded from the Docker build context, so they can never end up in the image.
 
-# Environment & credentials (injected via Cloud Run env vars / Secret Manager)
+# Secrets and local configuration (also keeps .env.example out)
 .env
 .env.*
+**/.env
+**/.env.*
+.envrc
 credentials/
+secrets/
+*.pem
+*.p12
+*.pfx
+*-key.json
+*service-account*.json
+.claude/
 
-# Git
-.git/
-.github/
+# Version control and CI
+.git
 .gitignore
+.gitattributes
+.github/
 
-# IDE / editor
-.vscode/
-.idea/
-*.swp
-*.swo
+# Virtualenvs and caches
+.venv/
+venv/
+env/
+**/__pycache__/
+**/*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
 
-# Docs & misc
-README.md
-logs/
-*.log
-.meridian/
-
-# Node (frontend build happens inside Docker)
-frontend/node_modules/
+# Node (dependencies are installed and the build runs inside Docker)
+**/node_modules/
 frontend/dist/
+
+# Tests and test tooling (not needed at run time)
+backend/tests/
+frontend/src/test/
+frontend/playwright.config.ts
+frontend/playwright-fixture.ts
+frontend/vitest.config.ts
+requirements-dev.txt
+
+# Local data, logs and generated files
+logs/
+**/*.log
+init_embeddings.json
+sample_docs/
+
+# Docs and notes
+docs/
+Project-runbook/
+**/*.md
