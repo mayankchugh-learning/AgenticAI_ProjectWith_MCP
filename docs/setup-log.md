@@ -173,3 +173,21 @@ Notes:
 - `git tag pre-mentor-merge`; `git switch -c merge/mentor-v1.1`; `git remote add mentor ./mayankAgarawal_repo/meridian-ai-learner`; `git fetch mentor` (new branch mentor/main). `git cat-file -t ad461cb` printed `commit`. ebcff84 not used.
 - Baseline (see `docs/merge-baseline.md`): `./.venv/Scripts/python.exe -m pytest backend/tests -q` 9 passed; `cd frontend; npm test` 16 passed; `npm run build` exit 0; `npm run lint` 16 problems (9 errors, 7 warnings). All match `docs/EXECUTION_REPORT.md`; no differences.
 - `npm run build` rewrote the git-ignored `frontend/dist`. No `.env` access, no Gemini or cloud call, no push.
+
+## 2026-10-11 M1 cherry-pick applied (branch merge/mentor-v1.1, NOT committed)
+- `git cherry-pick -n ad461cb` conflicted in 12 files (Dockerfile, README.md, 10 backend files). Resolution: backend code taken from the mentor (`git checkout --theirs`), then docstrings and logging adapted; Dockerfile and README merged by hand; `deploy.yml`, `.env.example`, `requirements.txt`, frontend and tests merged cleanly.
+- Logging changes (repo rule: sizes and ids, not user content): `rag/retrieval.py` query, rewrites and answer -> lengths; `agent/agents.py` phase results and memo -> `*_chars`; `agent/middleware.py` tool args -> argument names, result preview -> `result_chars`, error text -> exception type name.
+- Docstrings: module/function docstrings kept or restored in my style for local/cloud behaviour (logger, embeddings, vector_store, document_store, llm, data_ingestion, retrieval, tools, agents, endpoints). No "Vertex only", "GCS only", "langchain-classic" or "rebuilt on every call" text left (grep; `extract_text` remains as a real function).
+- Dockerfile: kept mine (pinned images, non-root, HEALTHCHECK, npm ci, exec CMD); added `/app/.meridian` owned by `app`. `.dockerignore`: added `.meridian/` (`.gitignore` already had it). `deploy.yml`: workflow_dispatch only; `APP_MODE=cloud` present in --set-env-vars. `tools.py`: mentor's `source = "LLM-estimated"` FX fix taken.
+- Docs: 18 mentor learner docs and `docs/examples` copied with `git checkout ad461cb -- ...`. Links to deleted `docs/05-backend-files.md` in `docs/04` and `docs/07` repointed to `docs/REFERENCE.md`. None of my own docs were touched in this step.
+- `pip install -r requirements.txt -r requirements-dev.txt`: all pins resolved, `pip check` clean. Results: `pytest backend/tests -q` 17 passed; `npm test` 16 passed; `tsc --noEmit` exit 0. Build and lint not re-run in this step.
+- No `.env` access, no Gemini or cloud call, no push, no commit. Files are staged only.
+
+## 2026-10-11 M1 verification and commits (see docs/merge-verification.md)
+- Line endings: HEAD and index are CRLF in every changed file; `git diff --cached --stat` and `--ignore-cr-at-eol --stat` were identical (3095 insertions, 349 deletions), so nothing was restored. `extract_text` in `rag/llm.py` kept (used by `agent/tools.py`).
+- Frontend: `npm run build` exit 0; `npm run lint` 16 problems (baseline); `npm test` 16 passed; no test edits needed.
+- Bug test first: `test_upload_then_index_stored_documents_does_not_duplicate` failed (1 chunk after upload, 2 after ingest). Fix: `document_store.source_key()` (`doc://<file>`) used by the upload route and `pdfs()`. Backend tests: 18 passed, then 20 passed after adding two offline smoke tests (health/status in local mode; cloud mode with empty settings gives 503 naming variables, no secret).
+- The existing test's made-up source label `local://sample.pdf` was changed to `doc://sample.pdf` (label only). `docs/09-fastapi-explained.md` example updated to `source_key`.
+- Docker: engine not running (named pipe missing), so build/run NOT VERIFIED. Live Gemini smoke test NOT VERIFIED (no credit).
+- Secret scan of the staged diff (Python regexes, names only printed): no matches; no `.env` or key file staged.
+- Commits are local only; no push, no merge into main.
