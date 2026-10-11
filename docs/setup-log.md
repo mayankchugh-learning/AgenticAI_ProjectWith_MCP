@@ -167,3 +167,9 @@ Notes:
 ## 2026-10-11 M1 scope amended
 - Owner amended M1 "Authorised scope" in `docs/IMPROVEMENT_PLAN.md` to also include the repo-root `README.md` and `CLAUDE.md` (the first scope missed them). The older README.md "outside the authorised scope" note under M1 conflicts is now superseded by this entry.
 - Commands (Git Bash, repo root): `sed -i` on line 65 of `docs/IMPROVEMENT_PLAN.md`; `git add` of the two docs; `git commit` on `scratch/explore` (not pushed).
+
+## 2026-10-11 M1 preparation (Prompt A steps 1-4; cherry-pick NOT started)
+- `git commit` of the two docs on `scratch/explore`: 351c395 (not pushed). Tree was then clean apart from the four untracked .pptx files.
+- `git tag pre-mentor-merge`; `git switch -c merge/mentor-v1.1`; `git remote add mentor ./mayankAgarawal_repo/meridian-ai-learner`; `git fetch mentor` (new branch mentor/main). `git cat-file -t ad461cb` printed `commit`. ebcff84 not used.
+- Baseline (see `docs/merge-baseline.md`): `./.venv/Scripts/python.exe -m pytest backend/tests -q` 9 passed; `cd frontend; npm test` 16 passed; `npm run build` exit 0; `npm run lint` 16 problems (9 errors, 7 warnings). All match `docs/EXECUTION_REPORT.md`; no differences.
+- `npm run build` rewrote the git-ignored `frontend/dist`. No `.env` access, no Gemini or cloud call, no push.
