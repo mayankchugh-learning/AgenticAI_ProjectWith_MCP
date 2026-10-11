@@ -2,11 +2,12 @@
 
 Four of them (sanctions screen, credit score, cross-border tax, expense classification)
 ask Gemini from its general knowledge; none of them looks anything up in a real data source.
-validate_fx_hedge first asks api.frankfurter.dev for a live exchange rate and only falls
-back to Gemini if that fails.
+validate_fx_hedge first asks api.frankfurter.dev for a live exchange rate; if that fails it
+asks Gemini and labels the result "LLM-estimated" instead of "live market".
 
 The docstring of every @tool function below is sent to the model as the tool's description,
-so changing its wording changes what the agent sees.
+so changing its wording changes what the agent sees. Every tool runs inside the middleware
+stack from agent/middleware.py (PII redaction, call limits, retries, one log line per call).
 """
 import json
 import requests
@@ -197,6 +198,7 @@ def validate_fx_hedge(currency_pair: str, rate_used: float) -> str:
         base, quote = parts[0], parts[1]
 
     market_rate = None
+    source = "live market"
 
     # --- Attempt 1: Live rate from Frankfurter API ---
     if base and quote:
@@ -214,6 +216,7 @@ def validate_fx_hedge(currency_pair: str, rate_used: float) -> str:
         prompt = f"""What is the approximate current exchange rate for {currency_pair.replace('_', '/')}?
 Respond with ONLY a single number (the rate). For example, if 1 EUR = 91.5 INR, respond: 91.5"""
         llm_result = _ask_llm(prompt)
+        source = "LLM-estimated"  # the live API failed, so say so in the result
         try:
             market_rate = float(llm_result.strip())
         except ValueError:
@@ -221,9 +224,6 @@ Respond with ONLY a single number (the rate). For example, if 1 EUR = 91.5 INR, 
 
     # --- Calculate variance ---
     variance = abs(rate_used - market_rate) / market_rate
-    # The label below depends only on whether the pair could be parsed. It still says
-    # "live market" when the rate actually came from the Gemini fallback above.
-    source = "live market" if base and quote else "estimated"
 
     if variance > 0.05:
         return (

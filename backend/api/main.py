@@ -7,29 +7,31 @@ Interactive API docs: http://localhost:8080/docs
 
 Exposes REST endpoints for:
   1. Running multi-agent procurement audits       (agent/agents.py)
-  2. Uploading documents into Vertex AI Vector Search (rag/data_ingestion.py)
+  2. Uploading documents into the vector store       (rag/data_ingestion.py)
+     APP_MODE=local -> Chroma on disk, APP_MODE=cloud -> Vertex AI Vector Search
   3. Querying the RAG pipeline                    (rag/retrieval.py)
 In Docker / Cloud Run the same server also serves the built React app.
 """
 import os
 from contextlib import asynccontextmanager
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 
 from api.endpoints import agent_router, health_router, rag_router, status_router
 from config.settings import settings
+from exceptions import ConfigurationError, IngestionError
 from logger import _LOGGER_INSTANCE
 from logger import GLOBAL_LOGGER as log
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
-    """Startup and shutdown hook. Nothing runs at startup; the log upload runs at shutdown."""
+    log.info("Meridian AI starting", mode=settings.app_mode, llm=settings.llm_model_name)
     yield  # the app runs here
-    # Shutdown: flush logs to GCS (critical on Cloud Run, whose disk disappears)
+    # Shutdown (cloud mode only): flush logs to GCS, because Cloud Run's disk disappears
     _LOGGER_INSTANCE.flush_to_gcs()
 
 
@@ -40,7 +42,6 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# CORS: every origin, method and header is allowed, with credentials (see "Tighten in production" below).
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],            # Tighten in production
@@ -49,7 +50,19 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# The /api/* routes are registered before the catch-all frontend route at the bottom of this file.
+@app.exception_handler(ConfigurationError)
+async def configuration_error(_: Request, exc: ConfigurationError):
+    """A missing setting is not a crash: tell the caller exactly what to set."""
+    log.error("Configuration error", error=str(exc))
+    return JSONResponse(status_code=503, content={"detail": str(exc)})
+
+
+@app.exception_handler(IngestionError)
+async def ingestion_error(_: Request, exc: IngestionError):
+    log.error("Ingestion error", error=str(exc))
+    return JSONResponse(status_code=422, content={"detail": str(exc)})
+
+
 app.include_router(health_router)
 app.include_router(status_router)
 app.include_router(agent_router)
@@ -68,12 +81,9 @@ if os.path.exists(frontend_dist):
     # Catch-all: serve a real file if it exists, otherwise index.html (React handles the route)
     @app.get("/{catchall:path}", include_in_schema=False)
     def serve_frontend(catchall: str):
-        """Serve a built frontend file, or index.html for any other path (the React app handles routing)."""
-        # Unknown /api/... paths must return a 404 instead of the web page.
         if catchall.startswith("api/"):
             raise HTTPException(status_code=404, detail="Not found")
         file_path = os.path.realpath(os.path.join(frontend_dist, catchall))
-        # Only serve files that really live inside frontend_dist (blocks "../" path traversal).
         if file_path.startswith(frontend_dist + os.sep) and os.path.isfile(file_path):
             return FileResponse(file_path)
         return FileResponse(os.path.join(frontend_dist, "index.html"))

@@ -1,14 +1,14 @@
-"""JSON logging: console and a local file, plus an upload of that file to Cloud Storage.
+"""JSON logging: console and a local file; in cloud mode the file is also uploaded to Cloud Storage.
 
 The module-level instance is created in logger/__init__.py. Log lines are structlog
-events rendered as JSON, one per line.
+events rendered as JSON, one per line. Repo rule: log sizes and ids, not user content.
 """
 import os
 import atexit
 import logging
 from datetime import datetime
 import structlog
-from google.cloud import storage
+
 from config.settings import settings
 
 def add_severity(logger, method_name, event_dict):
@@ -25,10 +25,13 @@ def add_severity(logger, method_name, event_dict):
 
 
 class CustomLogger:
-    """Owns one timestamped log file for the life of the process and uploads it on exit."""
+    """Owns one timestamped log file for the life of the process.
+
+    The file always goes to ./logs. In cloud mode only, it is also uploaded to Cloud Storage on exit.
+    """
 
     def __init__(self, log_dir="logs"):
-        # Ensure logs directory exists (created under the current working directory)
+        # Ensure logs directory exists
         self.logs_dir = os.path.join(os.getcwd(), log_dir)
         os.makedirs(self.logs_dir, exist_ok=True)
 
@@ -67,12 +70,14 @@ class CustomLogger:
 
         # Configure structlog for JSON structured logging.
         # Processors run in order: add an ISO UTC timestamp, add the level, copy it to
-        # "severity" for Cloud Logging, rename the message key to "event", render as JSON.
+        # "severity" for Cloud Logging, render exceptions as text, rename the message key to "event",
+        # then render as JSON.
         structlog.configure(
             processors=[
                 structlog.processors.TimeStamper(fmt="iso", utc=True, key="timestamp"),
                 structlog.processors.add_log_level,
                 add_severity,
+                structlog.processors.format_exc_info,  # log.exception(...) -> readable traceback field
                 structlog.processors.EventRenamer(to="event"),
                 structlog.processors.JSONRenderer()
             ],
@@ -83,19 +88,16 @@ class CustomLogger:
         return structlog.get_logger(logger_name)
 
     def flush_to_gcs(self):
-        """Upload the current log file to GCS. Safe to call multiple times."""
+        """Cloud mode only: upload the current log file to GCS. Safe to call multiple times."""
         if self._gcs_flushed:
             return
 
-        try:
-            # `settings` is already imported at the top of this module, so the `except`
-            # branch below (raw environment variables) is unlikely to run.
-            gcs_bucket = settings.GCS_BUCKET_NAME
-            gcp_project = settings.GCP_PROJECT
-        except Exception:
-            # Fallback for environments lacking the settings module
-            gcs_bucket = os.environ.get("GCS_BUCKET_NAME", "")
-            gcp_project = os.environ.get("GCP_PROJECT_ID", "")
+        # Local mode: the log file in ./logs is enough, never touch Google Cloud
+        if not settings.is_cloud:
+            return
+
+        gcs_bucket = settings.GCS_BUCKET_NAME
+        gcp_project = settings.GCP_PROJECT
 
         if not gcs_bucket:
             print("[Logger] GCS_BUCKET_NAME not set — skipping GCS log upload.")
@@ -106,6 +108,8 @@ class CustomLogger:
             return
 
         try:
+            from google.cloud import storage  # only needed (and imported) in cloud mode
+
             client = storage.Client(project=gcp_project or None)
             bucket = client.bucket(gcs_bucket)
             gcs_path = f"logs/{self._timestamp}.log"
