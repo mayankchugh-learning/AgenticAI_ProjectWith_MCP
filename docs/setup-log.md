@@ -149,3 +149,21 @@ Notes:
 - My assumptions (flagged in the document): one GCP project for both services, `-staging`/`-prod` resource suffixes, per-environment deployer service accounts, proposed (not added) `release.yml`.
 - Code fact checked: `GCP_REGION` is the Vertex region (`backend/rag/vector_store.py:15-19`), so Vector Search availability in asia-east2 must be confirmed (NOT VERIFIED).
 - No cloud command run; no workflow file added or changed.
+
+## 2026-10-11 Reference run of mentor v1.1 (owner request; work only inside mayankAgarawal_repo/meridian-ai-learner)
+- The mentor clone is git-ignored in this repo (commit e0b636f, `.gitignore` only). Nothing outside the clone was changed by the run, except the scratch files named below.
+- Clone's own venv: Python 3.12.10; `pip install -r requirements.txt -r requirements-dev.txt` exit 0; `pytest backend/tests -q`: 17 passed.
+- Backend started on port 8080 in `APP_MODE=local`: `/api/health` returned `{"status":"ok","mode":"local"}`; `/api/status` showed Chroma (local disk) and embedding `gemini-embedding-001` (Gemini API, not a local model).
+- `.env`: never opened or printed. The owner copied it in; the only check was a script printing `key_set = True`. Direct reads and `ls` of `.env` were denied by the permission rules and not worked around.
+- Two real calls to `POST /api/rag/upload` (same PDF, `aldermoor_annual_report_fy2024.pdf`) both failed: HTTP 500, 402 RESOURCE_EXHAUSTED, "prepayment credits are depleted". Chunks stayed 0. Steps 3 (ask, re-upload), 3b (`/api/rag/ingest`), 4 (audit) and 5 (frontend) were NOT run. Local mode is therefore NOT VERIFIED end to end.
+- The clone now contains untracked scratch files from this run (`.venv`, `.uvicorn.out`, `.count_chunks.py`, `logs/`); the backend may still be running on port 8080.
+
+## 2026-10-11 Plan item M1 approved (docs only, no code changed)
+- Owner approved new plan item M1: adopt mentor v1.1 (`ad461cb`) by cherry-pick onto a new branch. Decision = APPROVED, risky = Yes. The owner explicitly overrides CLAUDE.md rules 1 and 6 for M1 only.
+- Added M1 to `docs/IMPROVEMENT_PLAN.md` (new "Approved additions" table and details; M1 added to the risky-items list). Scope, dependency change and exclusions are recorded there as the owner stated them.
+- Read-only facts used: `git show --stat ad461cb` in the clone (29 files, +907/-681). Inferred conflicts are marked INFERRED/NOT VERIFIED in the plan.
+- No code, dependency, branch or workflow change in this step. No `.env` access, no cloud call, no Gemini call, no push.
+
+## 2026-10-11 M1 scope amended
+- Owner amended M1 "Authorised scope" in `docs/IMPROVEMENT_PLAN.md` to also include the repo-root `README.md` and `CLAUDE.md` (the first scope missed them). The older README.md "outside the authorised scope" note under M1 conflicts is now superseded by this entry.
+- Commands (Git Bash, repo root): `sed -i` on line 65 of `docs/IMPROVEMENT_PLAN.md`; `git add` of the two docs; `git commit` on `scratch/explore` (not pushed).

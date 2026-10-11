@@ -54,6 +54,27 @@ Every backend item below assumes Step 0 is done. Frontend items can start now (`
 | L6 | P3 | Frontend cleanup and lint | A-046 (rest), A-048 | none | Low | PENDING |
 | L7 | P3 | Logger import-time side effects and bounded logs | A-032, A-045 (logger part) | N5 | Medium | PENDING |
 
+### Approved additions (owner-requested, not from the audit)
+| ID | Pri | Title | Audit ids | Depends on | Risky? | Decision |
+|---|---|---|---|---|---|---|
+| M1 | P2 | Adopt mentor v1.1 (`ad461cb`) by cherry-pick onto a new branch | none | none (owner overrides the "tests first" ordering for this item; baseline tests are still run before and after) | **Yes** | APPROVED |
+
+**M1 details (approved 2026-10-11).**
+- **Source:** commit `ad461cb` "Meridian AI v1.1" in `./mayankAgarawal_repo/meridian-ai-learner`, a git-ignored clone with its own `.git`. Its stat (read with `git show --stat`): 29 files, +907 / -681. It adds `APP_MODE=local|cloud` (Chroma and a local document store instead of Vertex and GCS), `backend/agent/middleware.py`, `backend/exceptions/`, `backend/rag/document_store.py`, and `backend/tests/test_modes_and_middleware.py`; it also edits `settings.py`, `endpoints.py`, `main.py`, `retrieval.py`, `vector_store.py`, `embeddings.py`, `data_ingestion.py`, `llm.py`, the logger and `requirements.txt`.
+- **Method:** cherry-pick onto a new branch (not `scratch/explore`, not `main`). The clone is a separate repository, so its commit must first be fetched or applied as a patch; the exact method is chosen when work starts and logged.
+- **Authorised scope:** `backend/`, `requirements*.txt`, `Dockerfile`, `.dockerignore`, `.env.example`, `.github/workflows/deploy.yml`, `docs/`, and the repo-root `README.md` and `CLAUDE.md` (added 2026-10-11: the merge must update both; the first scope missed them); in `frontend/src` only `lib/api.ts`, `DocumentUploadTab.tsx`, `SystemStatusTab.tsx` and test files.
+- **Authorised dependency change:** add `langchain-chroma` and `chromadb`; move `langchain-google-vertexai` to a cloud-only group; remove `langchain-classic`. No other upgrades.
+- **Not authorised:** touching or reading `.env`; any cloud, `gcloud` or GitHub workflow run; live Gemini calls; pushing; merging into `main`; changing `AuditTab.tsx` or `RagQATab.tsx`.
+- **Overrides:** the owner explicitly overrides CLAUDE.md rules 1 and 6 for this item only. All other rules stay in force (no secrets, tests before and after, one logical change per commit, log in `setup-log.md`).
+- **Known conflicts to handle (INFERRED from the stat, NOT VERIFIED until the pick is tried):**
+  - The commit also changes `README.md`; since the 2026-10-11 scope amendment, README.md and CLAUDE.md are in scope and are merged section by section.
+  - It deletes `docs/05-backend-files.md`, `docs/16-exercises.md` and `docs/README.md` (mentor files). Check whether they exist here before accepting any docs deletion.
+  - Our `deploy.yml` was changed by Q1, our `Dockerfile` and `.dockerignore` were rewritten (commit `c9918af`), and backend files carry added docstrings (`2ac86e0`), so expect conflicts there.
+  - The mentor tests expect 17 passing; ours expect 9. Both suites must pass after the merge.
+- **Risks:** local mode changes how the app stores and embeds data (embedding model `gemini-embedding-001` through the Gemini API, observed in the reference run), so indexes are not interchangeable between modes. The reference run could not finish its upload test (Gemini returned 402, credits depleted), so local mode is NOT VERIFIED end to end.
+- **Testing:** `pytest backend/tests -q` before (baseline 9) and after; `cd frontend; npm test` and `npx tsc --noEmit -p tsconfig.app.json`; no live Gemini calls.
+- **Rollback:** delete the new branch (needs approval under the "Do not" list); `scratch/explore` and `main` are untouched.
+
 ### Deployment readiness
 | ID | Pri | Requirement | Status today | Plan item | Decision |
 |---|---|---|---|---|---|
@@ -70,7 +91,7 @@ Step 0 → Q1 → Q2, Q3, Q4, Q5, Q6, Q7, Q10, Q12 (independent, each its own co
 
 **Dependency chain in short:** tests (N5) gate every risky change; CI (N4) gates upgrades (N3); N1 needs your decision on who may use the app; L2 needs N6 timeouts first; L3 needs N2 so a new bucket has the right permissions.
 
-**Risky changes (need explicit approval before work starts):** N1, N2, N3, N6, N7, N11, L1, L2, DR-3, DR-4, and anything touching `deploy.yml` behaviour.
+**Risky changes (need explicit approval before work starts):** N1, N2, N3, N6, N7, N11, M1 (approved), L1, L2, DR-3, DR-4, and anything touching `deploy.yml` behaviour.
 
 ---
 
