@@ -53,3 +53,6 @@ sample_docs/
 docs/
 Project-runbook/
 **/*.md
+
+# Local-mode data (APP_MODE=local): vector database and uploaded PDFs
+.meridian/

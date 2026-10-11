@@ -48,7 +48,9 @@ COPY --chown=app:app backend/ ./backend/
 COPY --from=frontend-builder --chown=app:app /app/frontend/dist ./frontend/dist
 
 # The logger writes ./logs relative to the working directory, so that folder must be writable.
-RUN mkdir -p /app/logs && chown app:app /app/logs
+# .meridian is where APP_MODE=local keeps its Chroma database and uploaded PDFs; the non-root
+# user must own it. (It is lost when the container is removed unless a volume is mounted.)
+RUN mkdir -p /app/logs /app/.meridian && chown app:app /app/logs /app/.meridian
 
 USER app
 
